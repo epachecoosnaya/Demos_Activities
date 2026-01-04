@@ -11,7 +11,7 @@ app.secret_key = "super_secreto_demo"
 EMPRESA = "Altasolucion"
 LOGO = "logo.png"
 
-# SQLite en memoria (Render FREE friendly)
+# SQLite en memoria (ideal para Render FREE / demos)
 DB = ":memory:"
 
 # Mantener UNA sola conexión viva
@@ -54,24 +54,33 @@ def init_db():
         )
     """)
 
-    # Usuario demo SIEMPRE disponible
+    # Usuario vendedor demo
     conn.execute("""
         INSERT OR IGNORE INTO usuarios (usuario, password, rol)
         VALUES (?, ?, ?)
     """, ("demo", "1234", "vendedor"))
 
+    # Usuario admin demo
+    conn.execute("""
+        INSERT OR IGNORE INTO usuarios (usuario, password, rol)
+        VALUES (?, ?, ?)
+    """, ("admin", "admin123", "admin"))
+
     conn.commit()
-
-
-# Usuario admin
-conn.execute("""
-    INSERT OR IGNORE INTO usuarios (usuario, password, rol)
-    VALUES (?, ?, ?)
-""", ("admin", "admin123", "admin"))
 
 
 # Inicializar DB al arrancar la app
 init_db()
+
+
+# -------------------------
+# Contexto global para templates
+# -------------------------
+@app.context_processor
+def inject_now():
+    return {
+        "now": lambda: datetime.now().strftime("%Y-%m-%d %H:%M")
+    }
 
 
 # -------------------------
@@ -125,12 +134,20 @@ def dashboard():
 
     conn = get_db()
 
-    actividades = conn.execute("""
-        SELECT *
-        FROM actividades
-        WHERE usuario_id=?
-        ORDER BY fecha DESC
-    """, (session["user_id"],)).fetchall()
+    if session["rol"] == "admin":
+        actividades = conn.execute("""
+            SELECT a.*, u.usuario
+            FROM actividades a
+            JOIN usuarios u ON u.id = a.usuario_id
+            ORDER BY fecha DESC
+        """).fetchall()
+    else:
+        actividades = conn.execute("""
+            SELECT *
+            FROM actividades
+            WHERE usuario_id=?
+            ORDER BY fecha DESC
+        """, (session["user_id"],)).fetchall()
 
     return render_template(
         "dashboard.html",
@@ -156,7 +173,7 @@ def nueva_actividad():
         datetime.now().strftime("%Y-%m-%d %H:%M"),
         request.form["cliente"],
         request.form["comentarios"],
-        request.form["proxima_visita"]
+        request.form.get("proxima_visita")
     ))
 
     conn.commit()
