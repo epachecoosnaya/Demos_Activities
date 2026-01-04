@@ -1,58 +1,34 @@
 {% extends "base.html" %}
 {% block contenido %}
 
-<h4>Registrar visita</h4>
+<h4 class="mt-4">Registrar actividad</h4>
 
-<form method="POST" action="{{ url_for('nueva_actividad') }}" class="mb-4">
-    <div class="row">
-        <div class="col-md-4">
-            <label>Cliente *</label>
-            <input type="text" name="cliente" class="form-control" required>
-        </div>
+<form method="POST" action="{{ url_for('nueva_actividad') }}" class="card p-3 mt-3">
 
-        <div class="col-md-4">
-            <label>Próxima visita</label>
-            <input type="date" name="proxima_visita" class="form-control">
-        </div>
+  <div class="mb-3">
+    <label class="form-label">Fecha</label>
+    <input type="text" class="form-control" value="{{ now() }}" disabled>
+  </div>
 
-        <div class="col-md-4">
-            <label>Comentarios *</label>
-            <input type="text" name="comentarios" class="form-control" required>
-        </div>
-    </div>
+  <div class="mb-3">
+    <label class="form-label">Cliente *</label>
+    <input type="text" name="cliente" class="form-control" required>
+  </div>
 
-    <button class="btn btn-success mt-3">Guardar visita</button>
+  <div class="mb-3">
+    <label class="form-label">Comentarios de la visita *</label>
+    <textarea name="comentarios" class="form-control" rows="3" required></textarea>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Próxima visita</label>
+    <input type="date" name="proxima_visita" class="form-control">
+  </div>
+
+  <button type="submit" class="btn btn-primary">
+    Guardar actividad
+  </button>
 </form>
 
-<hr>
-
-<h5>Mis visitas</h5>
-
-<table class="table table-bordered">
-    <thead>
-        <tr>
-            <th>Fecha</th>
-            <th>Cliente</th>
-            <th>Comentarios</th>
-            <th>Próxima visita</th>
-            {% if rol == "admin" %}
-            <th>Vendedor</th>
-            {% endif %}
-        </tr>
-    </thead>
-    <tbody>
-        {% for a in actividades %}
-        <tr>
-            <td>{{ a.fecha }}</td>
-            <td>{{ a.cliente }}</td>
-            <td>{{ a.comentarios }}</td>
-            <td>{{ a.proxima_visita }}</td>
-            {% if rol == "admin" %}
-            <td>{{ a.usuario }}</td>
-            {% endif %}
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
 
 {% endblock %}
