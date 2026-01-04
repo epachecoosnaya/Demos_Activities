@@ -1,82 +1,43 @@
-<a href="{{ url_for('logout') }}" class="btn btn-outline-danger float-end">
-  Cerrar sesión
-</a>
+<a{% extends "base.html" %}
+
+{% block content %}
+
+<h3 class="mb-4">Panel principal</h3>
+
+<div class="row g-4">
+
+  <!-- VISITAS -->
+  <div class="col-md-4">
+    <a href="{{ url_for('visitas') }}" class="text-decoration-none">
+      <div class="card card-module shadow-sm">
+        <div class="card-body text-center">
+          <h5>📋 Visitas</h5>
+          <p class="text-muted">Registrar y consultar visitas</p>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  {% if rol == "admin" %}
+  <!-- USUARIOS -->
+  <div class="col-md-4">
+    <a href="{{ url_for('usuarios') }}" class="text-decoration-none">
+      <div class="card card-module shadow-sm">
+        <div class="card-body text-center">
+          <h5>👥 Usuarios</h5>
+          <p class="text-muted">Administrar vendedores</p>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+
+</div>
+
+<hr class="mt-5">
 
 <p class="text-muted">
   Sesión iniciada: {{ login_time }} (dura 8 horas)
 </p>
 
-<hr>
-
-<h4>Registrar actividad</h4>
-
-<form method="POST" action="{{ url_for('nueva_actividad') }}" class="card p-3">
-  <div class="mb-2">
-    <label>Fecha</label>
-    <input class="form-control" value="{{ now() }}" disabled>
-  </div>
-
-  <div class="mb-2">
-    <label>Cliente *</label>
-    <input name="cliente" class="form-control" required>
-  </div>
-
-  <div class="mb-2">
-    <label>Comentarios *</label>
-    <textarea name="comentarios" class="form-control" required></textarea>
-  </div>
-
-  <div class="mb-2">
-    <label>Próxima visita</label>
-    <input type="date" name="proxima_visita" class="form-control">
-  </div>
-
-  <button class="btn btn-primary mt-2">Guardar actividad</button>
-</form>
-
-<hr>
-
-<h4>Actividades</h4>
-
-<table class="table table-striped">
-  <thead>
-    <tr>
-      {% if rol == "admin" %}<th>Usuario</th>{% endif %}
-      <th>Fecha</th>
-      <th>Cliente</th>
-      <th>Comentarios</th>
-      <th>Próxima visita</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for a in actividades %}
-    <tr>
-      {% if rol == "admin" %}<td>{{ a.usuario }}</td>{% endif %}
-      <td>{{ a.fecha }}</td>
-      <td>{{ a.cliente }}</td>
-      <td>{{ a.comentarios }}</td>
-      <td>{{ a.proxima_visita or "-" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-
-{% if rol == "admin" %}
-<hr>
-
-<h4>Gestión de usuarios</h4>
-
-<form method="POST" action="{{ url_for('crear_usuario') }}" class="card p-3">
-  <input name="usuario" placeholder="Usuario" class="form-control mb-2" required>
-  <input name="email" placeholder="Email" class="form-control mb-2" required>
-  <input name="password" placeholder="Password" class="form-control mb-2" required>
-
-  <select name="rol" class="form-control mb-2">
-    <option value="vendedor">Vendedor</option>
-    <option value="admin">Admin</option>
-  </select>
-
-  <button class="btn btn-success">Crear usuario</button>
-</form>
-{% endif %}
-
+{% endblock %}
