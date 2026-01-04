@@ -63,6 +63,13 @@ def init_db():
     conn.commit()
 
 
+# Usuario admin
+conn.execute("""
+    INSERT OR IGNORE INTO usuarios (usuario, password, rol)
+    VALUES (?, ?, ?)
+""", ("admin", "admin123", "admin"))
+
+
 # Inicializar DB al arrancar la app
 init_db()
 
