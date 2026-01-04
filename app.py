@@ -52,10 +52,11 @@ except Exception as e:
     # Usuario demo inicial
     user = conn.execute("SELECT * FROM usuarios WHERE usuario='demo'").fetchone()
     if not user:
-        conn.execute(
-            "INSERT INTO usuarios (usuario, password, rol) VALUES (?, ?, ?)",
-            ("demo", "1234", "vendedor")
-        )
+        conn.execute("""
+INSERT OR IGNORE INTO usuarios (usuario, password, rol)
+VALUES (?, ?, ?)
+""", ("demo", "1234", "vendedor"))
+
 
     conn.commit()
     conn.close()
