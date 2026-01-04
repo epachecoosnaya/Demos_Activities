@@ -1,1 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4>👥 Usuarios</h4>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm">
+    ⬅ Volver
+  </a>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+
+    <form method="POST" action="{{ url_for('crear_usuario') }}" class="row g-3">
+
+      <div class="col-md-3">
+        <input name="usuario" class="form-control" placeholder="Usuario" required>
+      </div>
+
+      <div class="col-md-3">
+        <input name="email" class="form-control" placeholder="Email" required>
+      </div>
+
+      <div class="col-md-2">
+        <input name="password" class="form-control" placeholder="Password" required>
+      </div>
+
+      <div class="col-md-2">
+        <select name="rol" class="form-control">
+          <option value="vendedor">Vendedor</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <div class="col-md-2">
+        <button class="btn btn-success w-100">
+          Crear
+        </button>
+      </div>
+
+    </form>
+
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Email</th>
+          <th>Rol</th>
+          <th>Activo</th>
+          <th>Creado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td>{{ u.usuario }}</td>
+          <td>{{ u.email }}</td>
+          <td>{{ u.rol }}</td>
+          <td>{{ "Sí" if u.activo else "No" }}</td>
+          <td>{{ u.fecha_creacion }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+  </div>
+</div>
+
+{% endblock %}
 
