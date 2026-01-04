@@ -6,6 +6,10 @@ import os
 app = Flask(__name__)
 app.secret_key = "super_secreto_demo"
 
+@app.before_first_request
+def inicializar():
+    init_db()
+
 EMPRESA = "Altasolucion"
 LOGO = "logo.png"
 DB = "/tmp/actividades.db"
@@ -143,6 +147,4 @@ def nueva_actividad():
     return redirect(url_for("dashboard"))
 
 
-if __name__ == "__main__":
-    init_db()
-    app.run()
+
