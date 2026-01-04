@@ -51,10 +51,12 @@ def init_db():
 
 
 # 🔥 Inicializar DB al arrancar la app (Render / gunicorn compatible)
-try:
-    init_db()
-except Exception as e:
-    print("Error inicializando DB:", e)
+@app.before_request
+def ensure_db():
+    if not hasattr(app, "_db_initialized"):
+        init_db()
+        app._db_initialized = True
+
 
 
 @app.route("/")
