@@ -1,46 +1,43 @@
 {% extends "base.html" %}
-
 {% block contenido %}
 
-<h3>Registrar actividad</h3>
+<h4>Registrar visita</h4>
 
 <form method="POST" action="{{ url_for('nueva_actividad') }}" class="mb-4">
     <div class="row">
         <div class="col-md-4">
-            <label>Cliente</label>
+            <label>Cliente *</label>
             <input type="text" name="cliente" class="form-control" required>
         </div>
 
         <div class="col-md-4">
-            <label>Tipo de actividad</label>
-            <select name="tipo" class="form-control" required>
-                <option>Visita</option>
-                <option>Llamada</option>
-                <option>Seguimiento</option>
-                <option>Correo</option>
-            </select>
+            <label>Próxima visita</label>
+            <input type="date" name="proxima_visita" class="form-control">
         </div>
 
         <div class="col-md-4">
-            <label>Comentario</label>
-            <input type="text" name="comentario" class="form-control">
+            <label>Comentarios *</label>
+            <input type="text" name="comentarios" class="form-control" required>
         </div>
     </div>
 
-    <button class="btn btn-success mt-3">Guardar actividad</button>
+    <button class="btn btn-success mt-3">Guardar visita</button>
 </form>
 
 <hr>
 
-<h4>Actividades registradas</h4>
+<h5>Mis visitas</h5>
 
-<table class="table table-striped">
+<table class="table table-bordered">
     <thead>
         <tr>
             <th>Fecha</th>
             <th>Cliente</th>
-            <th>Tipo</th>
-            <th>Comentario</th>
+            <th>Comentarios</th>
+            <th>Próxima visita</th>
+            {% if rol == "admin" %}
+            <th>Vendedor</th>
+            {% endif %}
         </tr>
     </thead>
     <tbody>
@@ -48,8 +45,11 @@
         <tr>
             <td>{{ a.fecha }}</td>
             <td>{{ a.cliente }}</td>
-            <td>{{ a.tipo }}</td>
-            <td>{{ a.comentario }}</td>
+            <td>{{ a.comentarios }}</td>
+            <td>{{ a.proxima_visita }}</td>
+            {% if rol == "admin" %}
+            <td>{{ a.usuario }}</td>
+            {% endif %}
         </tr>
         {% endfor %}
     </tbody>
