@@ -4,18 +4,15 @@ from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.secret_key = "super_secreto_demo"
+app.permanent_session_lifetime = timedelta(hours=8)
 
 # -------------------------
-# Configuración general
+# Configuración
 # -------------------------
 EMPRESA = "Altasolucion"
 LOGO = "logo.png"
+DB = ":memory:"   # Para demos (Render Free)
 
-# Sesión válida por 8 horas
-app.permanent_session_lifetime = timedelta(hours=8)
-
-# SQLite en memoria (Render FREE / demos)
-DB = ":memory:"
 db_conn = None
 
 
@@ -33,7 +30,6 @@ def get_db():
 def init_db():
     conn = get_db()
 
-    # Usuarios
     conn.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,7 +42,6 @@ def init_db():
         )
     """)
 
-    # Actividades
     conn.execute("""
         CREATE TABLE IF NOT EXISTS actividades (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,7 +88,7 @@ init_db()
 
 
 # -------------------------
-# Contexto global
+# Variables globales para templates
 # -------------------------
 @app.context_processor
 def inject_now():
@@ -105,7 +100,7 @@ def inject_now():
 # -------------------------
 # Autenticación
 # -------------------------
-@app.route("/", methods=["GET"])
+@app.route("/")
 def inicio():
     return redirect(url_for("login"))
 
@@ -132,9 +127,14 @@ def login():
             session["login_time"] = datetime.now().strftime("%Y-%m-%d %H:%M")
             return redirect(url_for("dashboard"))
         else:
-            error = "Credenciales incorrectas o usuario inactivo"
+            error = "Usuario o contraseña incorrectos"
 
-    return render_template("login.html", empresa=EMPRESA, logo=LOGO, error=error)
+    return render_template(
+        "login.html",
+        empresa=EMPRESA,
+        logo=LOGO,
+        error=error
+    )
 
 
 @app.route("/logout")
@@ -144,10 +144,27 @@ def logout():
 
 
 # -------------------------
-# Dashboard
+# Dashboard (Portal)
 # -------------------------
 @app.route("/dashboard")
 def dashboard():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    return render_template(
+        "dashboard.html",
+        empresa=EMPRESA,
+        logo=LOGO,
+        rol=session["rol"],
+        login_time=session["login_time"]
+    )
+
+
+# -------------------------
+# Módulo Visitas
+# -------------------------
+@app.route("/visitas")
+def visitas():
     if "user_id" not in session:
         return redirect(url_for("login"))
 
@@ -160,12 +177,6 @@ def dashboard():
             JOIN usuarios u ON u.id = a.usuario_id
             ORDER BY fecha DESC
         """).fetchall()
-
-        usuarios = conn.execute("""
-            SELECT id, usuario, email, rol, activo, fecha_creacion
-            FROM usuarios
-            ORDER BY fecha_creacion DESC
-        """).fetchall()
     else:
         actividades = conn.execute("""
             SELECT *
@@ -173,22 +184,16 @@ def dashboard():
             WHERE usuario_id=?
             ORDER BY fecha DESC
         """, (session["user_id"],)).fetchall()
-        usuarios = []
 
     return render_template(
-        "dashboard.html",
+        "visitas.html",
         empresa=EMPRESA,
         logo=LOGO,
         actividades=actividades,
-        usuarios=usuarios,
-        rol=session["rol"],
-        login_time=session.get("login_time")
+        rol=session["rol"]
     )
 
 
-# -------------------------
-# Actividades
-# -------------------------
 @app.route("/actividad/nueva", methods=["POST"])
 def nueva_actividad():
     if "user_id" not in session:
@@ -208,12 +213,32 @@ def nueva_actividad():
     ))
 
     conn.commit()
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("visitas"))
 
 
 # -------------------------
-# Usuarios (ADMIN)
+# Módulo Usuarios (Admin)
 # -------------------------
+@app.route("/usuarios")
+def usuarios():
+    if session.get("rol") != "admin":
+        return redirect(url_for("dashboard"))
+
+    conn = get_db()
+    usuarios = conn.execute("""
+        SELECT usuario, email, rol, activo, fecha_creacion
+        FROM usuarios
+        ORDER BY fecha_creacion DESC
+    """).fetchall()
+
+    return render_template(
+        "usuarios.html",
+        empresa=EMPRESA,
+        logo=LOGO,
+        usuarios=usuarios
+    )
+
+
 @app.route("/usuarios/crear", methods=["POST"])
 def crear_usuario():
     if session.get("rol") != "admin":
@@ -234,7 +259,7 @@ def crear_usuario():
     ))
 
     conn.commit()
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("usuarios"))
 
 
 if __name__ == "__main__":
