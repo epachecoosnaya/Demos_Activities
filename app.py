@@ -68,9 +68,11 @@ def inicio():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    error = None
+
     if request.method == "POST":
-        usuario = request.form["usuario"]
-        password = request.form["password"]
+        usuario = request.form.get("usuario")
+        password = request.form.get("password")
 
         conn = get_db()
         user = conn.execute(
@@ -84,8 +86,16 @@ def login():
             session["usuario"] = user["usuario"]
             session["rol"] = user["rol"]
             return redirect(url_for("dashboard"))
+        else:
+            error = "Usuario o contraseña incorrectos"
 
-    return render_template("login.html", empresa=EMPRESA, logo=LOGO)
+    return render_template(
+        "login.html",
+        empresa=EMPRESA,
+        logo=LOGO,
+        error=error
+    )
+
 
 
 @app.route("/logout")
