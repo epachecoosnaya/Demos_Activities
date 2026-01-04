@@ -1,22 +1,10 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
+{% extends "base.html" %}
 
-<nav class="navbar navbar-dark bg-dark">
-    <div class="container-fluid">
-        <span class="navbar-brand">Portal de Actividades</span>
-    </div>
-</nav>
+{% block contenido %}
+<h3>Dashboard</h3>
+<p>Bienvenido al portal de actividades.</p>
 
-<div class="container mt-4">
-    <h3>Bienvenido</h3>
-    <p>Aquí podrás registrar tus actividades.</p>
+<div class="alert alert-info">
+    Aquí irán los módulos del sistema.
 </div>
-
-</body>
-</html>
+{% endblock %}
