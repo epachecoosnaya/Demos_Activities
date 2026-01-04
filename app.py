@@ -6,9 +6,6 @@ import os
 app = Flask(__name__)
 app.secret_key = "super_secreto_demo"
 
-@app.before_first_request
-def inicializar():
-    init_db()
 
 EMPRESA = "Altasolucion"
 LOGO = "logo.png"
@@ -45,6 +42,13 @@ def init_db():
     )
     """)
 
+    # Inicializar DB al arrancar (compatible con Render/gunicorn)
+try:
+    init_db()
+except Exception as e:
+    print("Error inicializando DB:", e)
+
+    
     # Usuario demo inicial
     user = conn.execute("SELECT * FROM usuarios WHERE usuario='demo'").fetchone()
     if not user:
@@ -145,6 +149,9 @@ def nueva_actividad():
     conn.close()
 
     return redirect(url_for("dashboard"))
+
+if __name__ == "__main__":
+    app.run()
 
 
 
