@@ -7,7 +7,7 @@ app.secret_key = "super_secreto_demo"
 
 EMPRESA = "Altasolucion"
 LOGO = "logo.png"
-DB = "/tmp/actividades.db"
+DB = "actividades.db"
 
 
 def get_db():
