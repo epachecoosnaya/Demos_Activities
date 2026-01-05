@@ -104,7 +104,8 @@ def login():
 
         conn = get_db()
         user = conn.execute("""
-            SELECT * FROM usuarios WHERE usuario=? AND activo=1
+            SELECT * FROM usuarios
+            WHERE usuario=? AND activo=1
         """, (u,)).fetchone()
 
         if user and check_password_hash(user["password"], p):
@@ -138,6 +139,60 @@ def dashboard():
         empresa=EMPRESA,
         logo=LOGO,
         rol=session["rol"]
+    )
+
+# -------------------------
+# VISITAS
+# -------------------------
+@app.route("/visitas")
+def visitas():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    conn = get_db()
+
+    if session["rol"] == "admin":
+        actividades = conn.execute("""
+            SELECT a.*, u.usuario
+            FROM actividades a
+            JOIN usuarios u ON u.id = a.usuario_id
+            ORDER BY fecha DESC
+        """).fetchall()
+    else:
+        actividades = conn.execute("""
+            SELECT *
+            FROM actividades
+            WHERE usuario_id=?
+            ORDER BY fecha DESC
+        """, (session["user_id"],)).fetchall()
+
+    return render_template(
+        "visitas.html",
+        empresa=EMPRESA,
+        logo=LOGO,
+        actividades=actividades,
+        rol=session["rol"]
+    )
+
+# -------------------------
+# USUARIOS (ADMIN)
+# -------------------------
+@app.route("/usuarios")
+def usuarios():
+    if session.get("rol") != "admin":
+        abort(403)
+
+    conn = get_db()
+    usuarios = conn.execute("""
+        SELECT * FROM usuarios
+        ORDER BY fecha_creacion DESC
+    """).fetchall()
+
+    return render_template(
+        "usuarios.html",
+        empresa=EMPRESA,
+        logo=LOGO,
+        usuarios=usuarios
     )
 
 # -------------------------
