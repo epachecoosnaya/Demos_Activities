@@ -6,62 +6,8 @@
   <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm">⬅ Dashboard</a>
 </div>
 
-<div class="card mb-4">
-  <div class="card-body">
-    <form method="POST" action="{{ url_for('nueva_actividad') }}">
-
-      <div class="row g-2">
-        <div class="col-md-3">
-          <label>Fecha</label>
-          <input class="form-control" value="{{ now() }}" disabled>
-        </div>
-
-        <div class="col-md-4">
-          <label>Cliente *</label>
-          <input name="cliente" class="form-control" required>
-        </div>
-
-        <div class="col-md-3">
-          <label>Próxima visita</label>
-          <input type="date" name="proxima_visita" class="form-control">
-        </div>
-
-        <div class="col-md-12">
-          <label>Comentarios *</label>
-          <textarea name="comentarios" class="form-control" required></textarea>
-        </div>
-      </div>
-
-      <button class="btn btn-primary mt-3">Guardar visita</button>
-    </form>
-  </div>
-</div>
-
-<div class="card">
-  <div class="card-body table-responsive">
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          {% if rol == "admin" %}<th>Usuario</th>{% endif %}
-          <th>Fecha</th>
-          <th>Cliente</th>
-          <th>Comentarios</th>
-          <th>Próxima visita</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for a in actividades %}
-        <tr>
-          {% if rol == "admin" %}<td>{{ a.usuario }}</td>{% endif %}
-          <td>{{ a.fecha }}</td>
-          <td>{{ a.cliente }}</td>
-          <td>{{ a.comentarios }}</td>
-          <td>{{ a.proxima_visita or "-" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+<div class="alert alert-info">
+  Módulo de visitas en construcción.
 </div>
 
 {% endblock %}
