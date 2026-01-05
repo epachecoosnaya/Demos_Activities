@@ -49,14 +49,28 @@
     <span class="d-none d-sm-inline">{{ empresa }}</span>
   </span>
 
-  <div class="d-flex align-items-center">
-    <span class="text-white small me-2">
+  {% if session.usuario %}
+  <div class="d-flex align-items-center gap-2">
+
+    <span class="text-white small d-none d-sm-inline">
       {{ session.usuario }}
     </span>
-    <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">
+
+    <!-- Cambiar password -->
+    <a href="{{ url_for('cambiar_password') }}"
+       class="btn btn-outline-light btn-sm"
+       title="Cambiar password">
+      🔐
+    </a>
+
+    <!-- Salir -->
+    <a href="{{ url_for('logout') }}"
+       class="btn btn-outline-light btn-sm">
       Salir
     </a>
+
   </div>
+  {% endif %}
 </nav>
 
 <div class="container my-4">
