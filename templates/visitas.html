@@ -1,21 +1,16 @@
 {% extends "base.html" %}
-
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h4>📋 Visitas</h4>
-  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm">
-    ⬅ Volver
-  </a>
-</div>
+<h4 class="mb-3">📋 Visitas</h4>
 
 <div class="card shadow-sm mb-4">
   <div class="card-body">
 
-    <form method="POST" action="{{ url_for('nueva_actividad') }}">
+    <form method="POST" action="{{ url_for('nueva_actividad') }}" enctype="multipart/form-data">
+
       <div class="row g-3">
 
-        <div class="col-md-3">
+        <div class="col-md-4">
           <label>Fecha</label>
           <input class="form-control" value="{{ now() }}" disabled>
         </div>
@@ -25,7 +20,7 @@
           <input name="cliente" class="form-control" required>
         </div>
 
-        <div class="col-md-5">
+        <div class="col-md-4">
           <label>Próxima visita</label>
           <input type="date" name="proxima_visita" class="form-control">
         </div>
@@ -35,44 +30,39 @@
           <textarea name="comentarios" class="form-control" required></textarea>
         </div>
 
+        <div class="col-12">
+          <label>Fotos (mínimo 2)</label>
+          <input type="file" name="fotos" class="form-control" accept="image/*" multiple required>
+        </div>
+
       </div>
 
       <button class="btn btn-primary mt-3">
         Guardar visita
       </button>
+
     </form>
 
   </div>
 </div>
 
-<div class="card shadow-sm">
+<hr>
+
+<h5>Historial</h5>
+
+{% for a in actividades %}
+<div class="card mb-3">
   <div class="card-body">
+    <strong>{{ a.fecha }}</strong> – {{ a.cliente }}
+    <p>{{ a.comentarios }}</p>
 
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          {% if rol == "admin" %}<th>Usuario</th>{% endif %}
-          <th>Fecha</th>
-          <th>Cliente</th>
-          <th>Comentarios</th>
-          <th>Próxima visita</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for a in actividades %}
-        <tr>
-          {% if rol == "admin" %}<td>{{ a.usuario }}</td>{% endif %}
-          <td>{{ a.fecha }}</td>
-          <td>{{ a.cliente }}</td>
-          <td>{{ a.comentarios }}</td>
-          <td>{{ a.proxima_visita or "-" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
+    <div class="d-flex flex-wrap gap-2">
+      {% for f in fotos if f.actividad_id == a.id %}
+        <img src="/static/{{ f.archivo }}" height="80" class="rounded">
+      {% endfor %}
+    </div>
   </div>
 </div>
+{% endfor %}
 
 {% endblock %}
-
