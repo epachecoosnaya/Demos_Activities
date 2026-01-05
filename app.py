@@ -1,8 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, abort
 import sqlite3
 from datetime import datetime, timedelta
-import os
-from werkzeug.utils import secure_filename
+import os, secrets
 
 app = Flask(__name__)
 app.secret_key = "super_secreto_demo"
@@ -10,10 +9,6 @@ app.permanent_session_lifetime = timedelta(hours=8)
 
 EMPRESA = "Altasolucion"
 LOGO = "logo.png"
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads", "actividades")
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 DB = ":memory:"
 db_conn = None
@@ -37,11 +32,15 @@ def init_db():
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             usuario TEXT UNIQUE,
-            email TEXT,
+            nombre TEXT,
+            apellido TEXT,
+            email TEXT UNIQUE,
             password TEXT,
             rol TEXT,
             activo INTEGER,
-            fecha_creacion TEXT
+            fecha_creacion TEXT,
+            reset_token TEXT,
+            reset_expira TEXT
         )
     """)
 
@@ -64,17 +63,25 @@ def init_db():
         )
     """)
 
+    # Usuario demo
     conn.execute("""
         INSERT OR IGNORE INTO usuarios
-        (usuario, email, password, rol, activo, fecha_creacion)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, ("demo", "demo@demo.com", "1234", "vendedor", 1, datetime.now().strftime("%Y-%m-%d %H:%M")))
+        (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        "demo", "Demo", "Vendedor", "demo@demo.com",
+        "1234", "vendedor", 1, datetime.now().strftime("%Y-%m-%d %H:%M")
+    ))
 
+    # Admin
     conn.execute("""
         INSERT OR IGNORE INTO usuarios
-        (usuario, email, password, rol, activo, fecha_creacion)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, ("admin", "admin@demo.com", "admin123", "admin", 1, datetime.now().strftime("%Y-%m-%d %H:%M")))
+        (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        "admin", "Admin", "Sistema", "admin@demo.com",
+        "admin123", "admin", 1, datetime.now().strftime("%Y-%m-%d %H:%M")
+    ))
 
     conn.commit()
 
@@ -88,9 +95,9 @@ def inject_now():
 
 
 # -------------------------
-# Auth
+# LOGIN / LOGOUT
 # -------------------------
-@app.route("/")
+@app.route("/", methods=["GET"])
 def inicio():
     return redirect(url_for("login"))
 
@@ -128,7 +135,7 @@ def logout():
 
 
 # -------------------------
-# Dashboard
+# DASHBOARD
 # -------------------------
 @app.route("/dashboard")
 def dashboard():
@@ -145,79 +152,76 @@ def dashboard():
 
 
 # -------------------------
-# Visitas
+# USUARIOS (ADMIN)
 # -------------------------
-@app.route("/visitas")
-def visitas():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
+@app.route("/usuarios")
+def usuarios():
+    if session.get("rol") != "admin":
+        return redirect(url_for("dashboard"))
 
     conn = get_db()
-    if session["rol"] == "admin":
-        actividades = conn.execute("""
-            SELECT a.*, u.usuario
-            FROM actividades a
-            JOIN usuarios u ON u.id = a.usuario_id
-            ORDER BY fecha DESC
-        """).fetchall()
-    else:
-        actividades = conn.execute("""
-            SELECT *
-            FROM actividades
-            WHERE usuario_id=?
-            ORDER BY fecha DESC
-        """, (session["user_id"],)).fetchall()
-
-    fotos = conn.execute("SELECT * FROM fotos").fetchall()
+    usuarios = conn.execute("""
+        SELECT *
+        FROM usuarios
+        ORDER BY fecha_creacion DESC
+    """).fetchall()
 
     return render_template(
-        "visitas.html",
+        "usuarios.html",
         empresa=EMPRESA,
         logo=LOGO,
-        actividades=actividades,
-        fotos=fotos,
-        rol=session["rol"]
+        usuarios=usuarios
     )
 
 
-@app.route("/actividad/nueva", methods=["POST"])
-def nueva_actividad():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-
-    archivos = request.files.getlist("fotos")
-    if len(archivos) < 2:
-        abort(400, "Debe subir mínimo 2 fotos")
+@app.route("/usuarios/guardar", methods=["POST"])
+def guardar_usuario():
+    if session.get("rol") != "admin":
+        abort(403)
 
     conn = get_db()
-    cur = conn.execute("""
-        INSERT INTO actividades
-        (usuario_id, fecha, cliente, comentarios, proxima_visita)
-        VALUES (?, ?, ?, ?, ?)
+    conn.execute("""
+        UPDATE usuarios SET
+        nombre=?,
+        apellido=?,
+        email=?,
+        rol=?,
+        activo=?
+        WHERE id=?
     """, (
-        session["user_id"],
-        datetime.now().strftime("%Y-%m-%d %H:%M"),
-        request.form["cliente"],
-        request.form["comentarios"],
-        request.form.get("proxima_visita")
+        request.form["nombre"],
+        request.form["apellido"],
+        request.form["email"],
+        request.form["rol"],
+        int(request.form.get("activo", 0)),
+        request.form["id"]
     ))
 
-    actividad_id = cur.lastrowid
-    carpeta = os.path.join(UPLOAD_FOLDER, f"actividad_{actividad_id}")
-    os.makedirs(carpeta, exist_ok=True)
-
-    for f in archivos:
-        nombre = secure_filename(f.filename)
-        ruta = os.path.join(carpeta, nombre)
-        f.save(ruta)
-        conn.execute(
-            "INSERT INTO fotos (actividad_id, archivo) VALUES (?, ?)",
-            (actividad_id, f"uploads/actividades/actividad_{actividad_id}/{nombre}")
-        )
-
     conn.commit()
-    return redirect(url_for("visitas"))
+    return redirect(url_for("usuarios"))
 
 
-if __name__ == "__main__":
-    app.run(debug=True)
+# -------------------------
+# OLVIDÉ CONTRASEÑA (BASE)
+# -------------------------
+@app.route("/forgot", methods=["GET", "POST"])
+def forgot_password():
+    msg = None
+    if request.method == "POST":
+        email = request.form["email"]
+
+        token = secrets.token_urlsafe(32)
+        expira = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
+
+        conn = get_db()
+        conn.execute("""
+            UPDATE usuarios
+            SET reset_token=?, reset_expira=?
+            WHERE email=?
+        """, (token, expira, email))
+        conn.commit()
+
+        # Aquí luego enviaremos correo
+        msg = "Si el correo existe, se enviará un enlace de recuperación."
+
+    return render_template("forgot.html", empresa=EMPRESA, mensaje=msg)
