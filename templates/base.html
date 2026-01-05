@@ -2,6 +2,10 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+
+  <!-- CLAVE PARA MÓVIL -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <title>{{ empresa }}</title>
 
   <!-- Bootstrap -->
@@ -11,31 +15,48 @@
     body {
       background-color: #f5f6f8;
     }
+
     .card-module {
+      height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       transition: transform .2s;
       cursor: pointer;
     }
+
     .card-module:hover {
       transform: scale(1.03);
+    }
+
+    .card-module h5 {
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 576px) {
+      .card-module {
+        height: 140px;
+      }
     }
   </style>
 </head>
 
 <body>
 
-<nav class="navbar navbar-dark bg-dark px-4">
-  <span class="navbar-brand">
+<nav class="navbar navbar-dark bg-dark px-3">
+  <span class="navbar-brand d-flex align-items-center">
     <img src="/static/{{ logo }}" height="32" class="me-2">
-    {{ empresa }}
+    <span class="d-none d-sm-inline">{{ empresa }}</span>
   </span>
 
-  <span class="text-white me-3">
-    {{ session.usuario }} ({{ session.rol }})
-  </span>
-
-  <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">
-    Cerrar sesión
-  </a>
+  <div class="d-flex align-items-center">
+    <span class="text-white small me-2">
+      {{ session.usuario }}
+    </span>
+    <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">
+      Salir
+    </a>
+  </div>
 </nav>
 
 <div class="container my-4">
