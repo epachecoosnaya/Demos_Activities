@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, abort
 import sqlite3
 from datetime import datetime, timedelta
-import os, secrets
+import secrets
 
 app = Flask(__name__)
 app.secret_key = "super_secreto_demo"
@@ -12,7 +12,6 @@ LOGO = "logo.png"
 
 DB = ":memory:"
 db_conn = None
-
 
 # -------------------------
 # DB
@@ -88,16 +87,17 @@ def init_db():
 
 init_db()
 
-
+# -------------------------
+# CONTEXT
+# -------------------------
 @app.context_processor
 def inject_now():
     return {"now": lambda: datetime.now().strftime("%Y-%m-%d %H:%M")}
 
-
 # -------------------------
 # LOGIN / LOGOUT
 # -------------------------
-@app.route("/", methods=["GET"])
+@app.route("/")
 def inicio():
     return redirect(url_for("login"))
 
@@ -105,6 +105,7 @@ def inicio():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
+
     if request.method == "POST":
         u = request.form["usuario"]
         p = request.form["password"]
@@ -133,7 +134,6 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-
 # -------------------------
 # DASHBOARD
 # -------------------------
@@ -150,7 +150,6 @@ def dashboard():
         login_time=session["login_time"]
     )
 
-
 # -------------------------
 # USUARIOS (ADMIN)
 # -------------------------
@@ -161,8 +160,7 @@ def usuarios():
 
     conn = get_db()
     usuarios = conn.execute("""
-        SELECT *
-        FROM usuarios
+        SELECT * FROM usuarios
         ORDER BY fecha_creacion DESC
     """).fetchall()
 
@@ -200,6 +198,60 @@ def guardar_usuario():
     conn.commit()
     return redirect(url_for("usuarios"))
 
+# -------------------------
+# VISITAS
+# -------------------------
+@app.route("/visitas")
+def visitas():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    conn = get_db()
+
+    if session["rol"] == "admin":
+        actividades = conn.execute("""
+            SELECT a.*, u.usuario
+            FROM actividades a
+            JOIN usuarios u ON u.id = a.usuario_id
+            ORDER BY fecha DESC
+        """).fetchall()
+    else:
+        actividades = conn.execute("""
+            SELECT *
+            FROM actividades
+            WHERE usuario_id=?
+            ORDER BY fecha DESC
+        """, (session["user_id"],)).fetchall()
+
+    return render_template(
+        "visitas.html",
+        empresa=EMPRESA,
+        logo=LOGO,
+        actividades=actividades,
+        rol=session["rol"]
+    )
+
+
+@app.route("/actividad/nueva", methods=["POST"])
+def nueva_actividad():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO actividades
+        (usuario_id, fecha, cliente, comentarios, proxima_visita)
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        session["user_id"],
+        datetime.now().strftime("%Y-%m-%d %H:%M"),
+        request.form["cliente"],
+        request.form["comentarios"],
+        request.form["proxima_visita"]
+    ))
+
+    conn.commit()
+    return redirect(url_for("visitas"))
 
 # -------------------------
 # OLVIDÉ CONTRASEÑA (BASE)
@@ -207,6 +259,7 @@ def guardar_usuario():
 @app.route("/forgot", methods=["GET", "POST"])
 def forgot_password():
     msg = None
+
     if request.method == "POST":
         email = request.form["email"]
 
@@ -221,7 +274,9 @@ def forgot_password():
         """, (token, expira, email))
         conn.commit()
 
-        # Aquí luego enviaremos correo
+        # 🔒 Aquí luego conectaremos tu API de ProTurbo
+        # send_reset_email(email, token)
+
         msg = "Si el correo existe, se enviará un enlace de recuperación."
 
     return render_template("forgot.html", empresa=EMPRESA, mensaje=msg)
