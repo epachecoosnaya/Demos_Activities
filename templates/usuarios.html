@@ -44,8 +44,9 @@
       <tbody>
         {% for u in usuarios %}
         <tr>
-          <form method="POST" action="{{ url_for('guardar_usuario') }}">
+          <form method="POST" action="{{ url_for('actualizar_usuario') }}">
             <input type="hidden" name="id" value="{{ u.id }}">
+
             <td>{{ u.usuario }}</td>
             <td><input name="nombre" value="{{ u.nombre }}" class="form-control form-control-sm"></td>
             <td><input name="apellido" value="{{ u.apellido }}" class="form-control form-control-sm"></td>
@@ -53,8 +54,8 @@
 
             <td>
               <select name="rol" class="form-select form-select-sm">
-                <option value="vendedor" {% if u.rol=='vendedor' %}selected{% endif %}>Vendedor</option>
-                <option value="admin" {% if u.rol=='admin' %}selected{% endif %}>Admin</option>
+                <option value="vendedor" {% if u.rol == 'vendedor' %}selected{% endif %}>Vendedor</option>
+                <option value="admin" {% if u.rol == 'admin' %}selected{% endif %}>Admin</option>
               </select>
             </td>
 
