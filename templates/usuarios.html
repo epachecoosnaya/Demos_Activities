@@ -1,19 +1,38 @@
 {% extends "base.html" %}
-
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h4>👥 Gestión de usuarios</h4>
-  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm">
-    ⬅ Volver
-  </a>
+<div class="d-flex justify-content-between mb-3">
+  <h4>👥 Usuarios</h4>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm">⬅ Dashboard</a>
 </div>
 
-<div class="card shadow-sm">
-  <div class="card-body table-responsive">
+<!-- CREAR USUARIO -->
+<div class="card mb-4">
+  <div class="card-body">
+    <h6>Crear nuevo usuario</h6>
 
+    <form method="POST" action="{{ url_for('crear_usuario') }}" class="row g-2">
+      <input name="usuario" class="form-control col" placeholder="Usuario" required>
+      <input name="nombre" class="form-control col" placeholder="Nombre" required>
+      <input name="apellido" class="form-control col" placeholder="Apellido" required>
+      <input name="email" class="form-control col" placeholder="Email" required>
+      <input name="password" class="form-control col" placeholder="Password" required>
+
+      <select name="rol" class="form-select col">
+        <option value="vendedor">Vendedor</option>
+        <option value="admin">Admin</option>
+      </select>
+
+      <button class="btn btn-success col">Crear</button>
+    </form>
+  </div>
+</div>
+
+<!-- LISTA -->
+<div class="card">
+  <div class="card-body table-responsive">
     <table class="table table-bordered align-middle">
-      <thead class="table-light">
+      <thead>
         <tr>
           <th>Usuario</th>
           <th>Nombre</th>
@@ -21,78 +40,39 @@
           <th>Email</th>
           <th>Rol</th>
           <th>Activo</th>
-          <th>Acción</th>
+          <th>Guardar</th>
         </tr>
       </thead>
       <tbody>
-
         {% for u in usuarios %}
         <tr>
           <form method="POST" action="{{ url_for('guardar_usuario') }}">
-
             <input type="hidden" name="id" value="{{ u.id }}">
 
-            <td>
-              <strong>{{ u.usuario }}</strong>
-            </td>
-
-            <td>
-              <input
-                name="nombre"
-                class="form-control form-control-sm"
-                value="{{ u.nombre or '' }}"
-                required>
-            </td>
-
-            <td>
-              <input
-                name="apellido"
-                class="form-control form-control-sm"
-                value="{{ u.apellido or '' }}"
-                required>
-            </td>
-
-            <td>
-              <input
-                type="email"
-                name="email"
-                class="form-control form-control-sm"
-                value="{{ u.email }}"
-                required>
-            </td>
+            <td>{{ u.usuario }}</td>
+            <td><input name="nombre" value="{{ u.nombre }}" class="form-control form-control-sm"></td>
+            <td><input name="apellido" value="{{ u.apellido }}" class="form-control form-control-sm"></td>
+            <td><input name="email" value="{{ u.email }}" class="form-control form-control-sm"></td>
 
             <td>
               <select name="rol" class="form-select form-select-sm">
-                <option value="vendedor" {% if u.rol == "vendedor" %}selected{% endif %}>
-                  Vendedor
-                </option>
-                <option value="admin" {% if u.rol == "admin" %}selected{% endif %}>
-                  Admin
-                </option>
+                <option value="vendedor" {% if u.rol=='vendedor' %}selected{% endif %}>Vendedor</option>
+                <option value="admin" {% if u.rol=='admin' %}selected{% endif %}>Admin</option>
               </select>
             </td>
 
             <td class="text-center">
-              <input
-                type="checkbox"
-                name="activo"
-                value="1"
-                {% if u.activo %}checked{% endif %}>
+              <input type="checkbox" name="activo" value="1" {% if u.activo %}checked{% endif %}>
             </td>
 
             <td>
-              <button class="btn btn-success btn-sm">
-                Guardar
-              </button>
+              <button class="btn btn-primary btn-sm">Guardar</button>
             </td>
-
           </form>
         </tr>
         {% endfor %}
-
       </tbody>
     </table>
-
   </div>
 </div>
 
