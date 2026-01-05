@@ -1,7 +1,7 @@
-from flask import Flask, render_template, request, redirect, url_for, session, abort
+ffrom flask import Flask, render_template, request, redirect, url_for, session, abort
 import sqlite3
 from datetime import datetime, timedelta
-import secrets
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = "super_secreto_demo"
@@ -37,9 +37,7 @@ def init_db():
             password TEXT,
             rol TEXT,
             activo INTEGER,
-            fecha_creacion TEXT,
-            reset_token TEXT,
-            reset_expira TEXT
+            fecha_creacion TEXT
         )
     """)
 
@@ -54,23 +52,26 @@ def init_db():
         )
     """)
 
-    # Usuarios base
+    # Admin
     conn.execute("""
         INSERT OR IGNORE INTO usuarios
         (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "admin", "Admin", "Sistema", "admin@demo.com",
-        "admin123", "admin", 1, datetime.now().strftime("%Y-%m-%d %H:%M")
+        generate_password_hash("admin123"),
+        "admin", 1, datetime.now().strftime("%Y-%m-%d %H:%M")
     ))
 
+    # Demo
     conn.execute("""
         INSERT OR IGNORE INTO usuarios
         (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "demo", "Demo", "Vendedor", "demo@demo.com",
-        "1234", "vendedor", 1, datetime.now().strftime("%Y-%m-%d %H:%M")
+        generate_password_hash("1234"),
+        "vendedor", 1, datetime.now().strftime("%Y-%m-%d %H:%M")
     ))
 
     conn.commit()
@@ -78,15 +79,10 @@ def init_db():
 
 init_db()
 
-
-@app.context_processor
-def inject_now():
-    return {"now": lambda: datetime.now().strftime("%Y-%m-%d %H:%M")}
-
 # -------------------------
-# LOGIN / LOGOUT
+# LOGIN
 # -------------------------
-@app.route("/")
+@app.route("/", methods=["GET"])
 def inicio():
     return redirect(url_for("login"))
 
@@ -94,17 +90,17 @@ def inicio():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
+
     if request.method == "POST":
         u = request.form["usuario"]
         p = request.form["password"]
 
         conn = get_db()
         user = conn.execute("""
-            SELECT * FROM usuarios
-            WHERE usuario=? AND password=? AND activo=1
-        """, (u, p)).fetchone()
+            SELECT * FROM usuarios WHERE usuario=? AND activo=1
+        """, (u,)).fetchone()
 
-        if user:
+        if user and check_password_hash(user["password"], p):
             session.permanent = True
             session["user_id"] = user["id"]
             session["usuario"] = user["usuario"]
@@ -134,8 +130,7 @@ def dashboard():
         "dashboard.html",
         empresa=EMPRESA,
         logo=LOGO,
-        rol=session["rol"],
-        login_time=session["login_time"]
+        rol=session["rol"]
     )
 
 # -------------------------
@@ -147,7 +142,7 @@ def usuarios():
         return redirect(url_for("dashboard"))
 
     conn = get_db()
-    usuarios = conn.execute("SELECT * FROM usuarios ORDER BY fecha_creacion DESC").fetchall()
+    usuarios = conn.execute("SELECT * FROM usuarios").fetchall()
 
     return render_template(
         "usuarios.html",
@@ -166,15 +161,14 @@ def crear_usuario():
     conn.execute("""
         INSERT INTO usuarios
         (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
     """, (
         request.form["usuario"],
         request.form["nombre"],
         request.form["apellido"],
         request.form["email"],
-        request.form["password"],
+        generate_password_hash(request.form["password"]),
         request.form["rol"],
-        1,
         datetime.now().strftime("%Y-%m-%d %H:%M")
     ))
 
@@ -207,58 +201,3 @@ def guardar_usuario():
 
     conn.commit()
     return redirect(url_for("usuarios"))
-
-# -------------------------
-# VISITAS
-# -------------------------
-@app.route("/visitas")
-def visitas():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-
-    conn = get_db()
-
-    if session["rol"] == "admin":
-        actividades = conn.execute("""
-            SELECT a.*, u.usuario
-            FROM actividades a
-            JOIN usuarios u ON u.id = a.usuario_id
-            ORDER BY fecha DESC
-        """).fetchall()
-    else:
-        actividades = conn.execute("""
-            SELECT *
-            FROM actividades
-            WHERE usuario_id=?
-            ORDER BY fecha DESC
-        """, (session["user_id"],)).fetchall()
-
-    return render_template(
-        "visitas.html",
-        empresa=EMPRESA,
-        logo=LOGO,
-        actividades=actividades,
-        rol=session["rol"]
-    )
-
-
-@app.route("/actividad/nueva", methods=["POST"])
-def nueva_actividad():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-
-    conn = get_db()
-    conn.execute("""
-        INSERT INTO actividades
-        (usuario_id, fecha, cliente, comentarios, proxima_visita)
-        VALUES (?, ?, ?, ?, ?)
-    """, (
-        session["user_id"],
-        datetime.now().strftime("%Y-%m-%d %H:%M"),
-        request.form["cliente"],
-        request.form["comentarios"],
-        request.form["proxima_visita"]
-    ))
-
-    conn.commit()
-    return redirect(url_for("visitas"))
