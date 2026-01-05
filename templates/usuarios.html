@@ -6,17 +6,16 @@
   <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm">⬅ Dashboard</a>
 </div>
 
-<!-- CREAR USUARIO -->
 <div class="card mb-4">
   <div class="card-body">
-    <h6>Crear nuevo usuario</h6>
+    <h6>Crear usuario</h6>
 
     <form method="POST" action="{{ url_for('crear_usuario') }}" class="row g-2">
       <input name="usuario" class="form-control col" placeholder="Usuario" required>
       <input name="nombre" class="form-control col" placeholder="Nombre" required>
       <input name="apellido" class="form-control col" placeholder="Apellido" required>
       <input name="email" class="form-control col" placeholder="Email" required>
-      <input name="password" class="form-control col" placeholder="Password" required>
+      <input type="password" name="password" class="form-control col" placeholder="Password inicial" required>
 
       <select name="rol" class="form-select col">
         <option value="vendedor">Vendedor</option>
@@ -28,7 +27,6 @@
   </div>
 </div>
 
-<!-- LISTA -->
 <div class="card">
   <div class="card-body table-responsive">
     <table class="table table-bordered align-middle">
@@ -40,7 +38,7 @@
           <th>Email</th>
           <th>Rol</th>
           <th>Activo</th>
-          <th>Guardar</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -48,7 +46,6 @@
         <tr>
           <form method="POST" action="{{ url_for('guardar_usuario') }}">
             <input type="hidden" name="id" value="{{ u.id }}">
-
             <td>{{ u.usuario }}</td>
             <td><input name="nombre" value="{{ u.nombre }}" class="form-control form-control-sm"></td>
             <td><input name="apellido" value="{{ u.apellido }}" class="form-control form-control-sm"></td>
