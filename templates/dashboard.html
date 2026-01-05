@@ -1,18 +1,22 @@
-<a{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
 
-<h3 class="mb-4">Panel principal</h3>
+<h4 class="mb-4 text-center text-sm-start">
+  Panel principal
+</h4>
 
-<div class="row g-4">
+<div class="row g-3">
 
   <!-- VISITAS -->
-  <div class="col-md-4">
+  <div class="col-12 col-md-4">
     <a href="{{ url_for('visitas') }}" class="text-decoration-none">
-      <div class="card card-module shadow-sm">
-        <div class="card-body text-center">
+      <div class="card card-module shadow-sm text-center">
+        <div>
           <h5>📋 Visitas</h5>
-          <p class="text-muted">Registrar y consultar visitas</p>
+          <p class="text-muted mb-0">
+            Registrar y consultar
+          </p>
         </div>
       </div>
     </a>
@@ -20,12 +24,14 @@
 
   {% if rol == "admin" %}
   <!-- USUARIOS -->
-  <div class="col-md-4">
+  <div class="col-12 col-md-4">
     <a href="{{ url_for('usuarios') }}" class="text-decoration-none">
-      <div class="card card-module shadow-sm">
-        <div class="card-body text-center">
+      <div class="card card-module shadow-sm text-center">
+        <div>
           <h5>👥 Usuarios</h5>
-          <p class="text-muted">Administrar vendedores</p>
+          <p class="text-muted mb-0">
+            Administración
+          </p>
         </div>
       </div>
     </a>
@@ -34,10 +40,10 @@
 
 </div>
 
-<hr class="mt-5">
+<hr class="mt-4">
 
-<p class="text-muted">
-  Sesión iniciada: {{ login_time }} (dura 8 horas)
+<p class="text-muted small text-center text-sm-start">
+  Sesión iniciada: {{ login_time }} (8 horas)
 </p>
 
 {% endblock %}
