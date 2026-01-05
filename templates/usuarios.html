@@ -3,70 +3,93 @@
 {% block content %}
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h4>👥 Usuarios</h4>
+  <h4>👥 Gestión de usuarios</h4>
   <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm">
     ⬅ Volver
   </a>
 </div>
 
-<div class="card shadow-sm mb-4">
-  <div class="card-body">
-
-    <form method="POST" action="{{ url_for('crear_usuario') }}" class="row g-3">
-
-      <div class="col-md-3">
-        <input name="usuario" class="form-control" placeholder="Usuario" required>
-      </div>
-
-      <div class="col-md-3">
-        <input name="email" class="form-control" placeholder="Email" required>
-      </div>
-
-      <div class="col-md-2">
-        <input name="password" class="form-control" placeholder="Password" required>
-      </div>
-
-      <div class="col-md-2">
-        <select name="rol" class="form-control">
-          <option value="vendedor">Vendedor</option>
-          <option value="admin">Admin</option>
-        </select>
-      </div>
-
-      <div class="col-md-2">
-        <button class="btn btn-success w-100">
-          Crear
-        </button>
-      </div>
-
-    </form>
-
-  </div>
-</div>
-
 <div class="card shadow-sm">
-  <div class="card-body">
+  <div class="card-body table-responsive">
 
-    <table class="table table-bordered">
-      <thead>
+    <table class="table table-bordered align-middle">
+      <thead class="table-light">
         <tr>
           <th>Usuario</th>
+          <th>Nombre</th>
+          <th>Apellido</th>
           <th>Email</th>
           <th>Rol</th>
           <th>Activo</th>
-          <th>Creado</th>
+          <th>Acción</th>
         </tr>
       </thead>
       <tbody>
+
         {% for u in usuarios %}
         <tr>
-          <td>{{ u.usuario }}</td>
-          <td>{{ u.email }}</td>
-          <td>{{ u.rol }}</td>
-          <td>{{ "Sí" if u.activo else "No" }}</td>
-          <td>{{ u.fecha_creacion }}</td>
+          <form method="POST" action="{{ url_for('guardar_usuario') }}">
+
+            <input type="hidden" name="id" value="{{ u.id }}">
+
+            <td>
+              <strong>{{ u.usuario }}</strong>
+            </td>
+
+            <td>
+              <input
+                name="nombre"
+                class="form-control form-control-sm"
+                value="{{ u.nombre or '' }}"
+                required>
+            </td>
+
+            <td>
+              <input
+                name="apellido"
+                class="form-control form-control-sm"
+                value="{{ u.apellido or '' }}"
+                required>
+            </td>
+
+            <td>
+              <input
+                type="email"
+                name="email"
+                class="form-control form-control-sm"
+                value="{{ u.email }}"
+                required>
+            </td>
+
+            <td>
+              <select name="rol" class="form-select form-select-sm">
+                <option value="vendedor" {% if u.rol == "vendedor" %}selected{% endif %}>
+                  Vendedor
+                </option>
+                <option value="admin" {% if u.rol == "admin" %}selected{% endif %}>
+                  Admin
+                </option>
+              </select>
+            </td>
+
+            <td class="text-center">
+              <input
+                type="checkbox"
+                name="activo"
+                value="1"
+                {% if u.activo %}checked{% endif %}>
+            </td>
+
+            <td>
+              <button class="btn btn-success btn-sm">
+                Guardar
+              </button>
+            </td>
+
+          </form>
         </tr>
         {% endfor %}
+
       </tbody>
     </table>
 
@@ -74,4 +97,3 @@
 </div>
 
 {% endblock %}
-
