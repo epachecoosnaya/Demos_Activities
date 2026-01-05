@@ -54,25 +54,7 @@ def init_db():
         )
     """)
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS fotos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            actividad_id INTEGER,
-            archivo TEXT
-        )
-    """)
-
-    # Usuario demo
-    conn.execute("""
-        INSERT OR IGNORE INTO usuarios
-        (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        "demo", "Demo", "Vendedor", "demo@demo.com",
-        "1234", "vendedor", 1, datetime.now().strftime("%Y-%m-%d %H:%M")
-    ))
-
-    # Admin
+    # Usuarios base
     conn.execute("""
         INSERT OR IGNORE INTO usuarios
         (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
@@ -82,14 +64,21 @@ def init_db():
         "admin123", "admin", 1, datetime.now().strftime("%Y-%m-%d %H:%M")
     ))
 
+    conn.execute("""
+        INSERT OR IGNORE INTO usuarios
+        (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        "demo", "Demo", "Vendedor", "demo@demo.com",
+        "1234", "vendedor", 1, datetime.now().strftime("%Y-%m-%d %H:%M")
+    ))
+
     conn.commit()
 
 
 init_db()
 
-# -------------------------
-# CONTEXT
-# -------------------------
+
 @app.context_processor
 def inject_now():
     return {"now": lambda: datetime.now().strftime("%Y-%m-%d %H:%M")}
@@ -105,7 +94,6 @@ def inicio():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
-
     if request.method == "POST":
         u = request.form["usuario"]
         p = request.form["password"]
@@ -159,10 +147,7 @@ def usuarios():
         return redirect(url_for("dashboard"))
 
     conn = get_db()
-    usuarios = conn.execute("""
-        SELECT * FROM usuarios
-        ORDER BY fecha_creacion DESC
-    """).fetchall()
+    usuarios = conn.execute("SELECT * FROM usuarios ORDER BY fecha_creacion DESC").fetchall()
 
     return render_template(
         "usuarios.html",
@@ -170,6 +155,31 @@ def usuarios():
         logo=LOGO,
         usuarios=usuarios
     )
+
+
+@app.route("/usuarios/crear", methods=["POST"])
+def crear_usuario():
+    if session.get("rol") != "admin":
+        abort(403)
+
+    conn = get_db()
+    conn.execute("""
+        INSERT INTO usuarios
+        (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        request.form["usuario"],
+        request.form["nombre"],
+        request.form["apellido"],
+        request.form["email"],
+        request.form["password"],
+        request.form["rol"],
+        1,
+        datetime.now().strftime("%Y-%m-%d %H:%M")
+    ))
+
+    conn.commit()
+    return redirect(url_for("usuarios"))
 
 
 @app.route("/usuarios/guardar", methods=["POST"])
@@ -252,31 +262,3 @@ def nueva_actividad():
 
     conn.commit()
     return redirect(url_for("visitas"))
-
-# -------------------------
-# OLVIDÉ CONTRASEÑA (BASE)
-# -------------------------
-@app.route("/forgot", methods=["GET", "POST"])
-def forgot_password():
-    msg = None
-
-    if request.method == "POST":
-        email = request.form["email"]
-
-        token = secrets.token_urlsafe(32)
-        expira = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
-
-        conn = get_db()
-        conn.execute("""
-            UPDATE usuarios
-            SET reset_token=?, reset_expira=?
-            WHERE email=?
-        """, (token, expira, email))
-        conn.commit()
-
-        # 🔒 Aquí luego conectaremos tu API de ProTurbo
-        # send_reset_email(email, token)
-
-        msg = "Si el correo existe, se enviará un enlace de recuperación."
-
-    return render_template("forgot.html", empresa=EMPRESA, mensaje=msg)
