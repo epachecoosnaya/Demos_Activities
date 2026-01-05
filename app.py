@@ -1,4 +1,4 @@
-ffrom flask import Flask, render_template, request, redirect, url_for, session, abort
+from flask import Flask, render_template, request, redirect, url_for, session, abort
 import sqlite3
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -80,9 +80,16 @@ def init_db():
 init_db()
 
 # -------------------------
-# LOGIN
+# CONTEXT
 # -------------------------
-@app.route("/", methods=["GET"])
+@app.context_processor
+def inject_now():
+    return {"now": lambda: datetime.now().strftime("%Y-%m-%d %H:%M")}
+
+# -------------------------
+# LOGIN / LOGOUT
+# -------------------------
+@app.route("/")
 def inicio():
     return redirect(url_for("login"))
 
@@ -134,70 +141,47 @@ def dashboard():
     )
 
 # -------------------------
-# USUARIOS (ADMIN)
+# CAMBIAR PASSWORD (USUARIO)
 # -------------------------
-@app.route("/usuarios")
-def usuarios():
-    if session.get("rol") != "admin":
-        return redirect(url_for("dashboard"))
+@app.route("/cambiar-password", methods=["GET", "POST"])
+def cambiar_password():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
 
-    conn = get_db()
-    usuarios = conn.execute("SELECT * FROM usuarios").fetchall()
+    msg = None
+    error = None
+
+    if request.method == "POST":
+        actual = request.form["actual"]
+        nuevo = request.form["nuevo"]
+        confirmar = request.form["confirmar"]
+
+        if nuevo != confirmar:
+            error = "El nuevo password no coincide"
+        else:
+            conn = get_db()
+            user = conn.execute(
+                "SELECT * FROM usuarios WHERE id=?",
+                (session["user_id"],)
+            ).fetchone()
+
+            if not check_password_hash(user["password"], actual):
+                error = "Password actual incorrecto"
+            else:
+                conn.execute("""
+                    UPDATE usuarios
+                    SET password=?
+                    WHERE id=?
+                """, (
+                    generate_password_hash(nuevo),
+                    session["user_id"]
+                ))
+                conn.commit()
+                msg = "Password actualizado correctamente"
 
     return render_template(
-        "usuarios.html",
+        "cambiar_password.html",
         empresa=EMPRESA,
-        logo=LOGO,
-        usuarios=usuarios
+        mensaje=msg,
+        error=error
     )
-
-
-@app.route("/usuarios/crear", methods=["POST"])
-def crear_usuario():
-    if session.get("rol") != "admin":
-        abort(403)
-
-    conn = get_db()
-    conn.execute("""
-        INSERT INTO usuarios
-        (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
-        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-    """, (
-        request.form["usuario"],
-        request.form["nombre"],
-        request.form["apellido"],
-        request.form["email"],
-        generate_password_hash(request.form["password"]),
-        request.form["rol"],
-        datetime.now().strftime("%Y-%m-%d %H:%M")
-    ))
-
-    conn.commit()
-    return redirect(url_for("usuarios"))
-
-
-@app.route("/usuarios/guardar", methods=["POST"])
-def guardar_usuario():
-    if session.get("rol") != "admin":
-        abort(403)
-
-    conn = get_db()
-    conn.execute("""
-        UPDATE usuarios SET
-        nombre=?,
-        apellido=?,
-        email=?,
-        rol=?,
-        activo=?
-        WHERE id=?
-    """, (
-        request.form["nombre"],
-        request.form["apellido"],
-        request.form["email"],
-        request.form["rol"],
-        int(request.form.get("activo", 0)),
-        request.form["id"]
-    ))
-
-    conn.commit()
-    return redirect(url_for("usuarios"))
