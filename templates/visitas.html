@@ -1,13 +1,46 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="d-flex justify-content-between mb-3">
-  <h4>📋 Visitas</h4>
-  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary btn-sm">⬅ Dashboard</a>
-</div>
+<h3 class="mb-3">Registrar visita</h3>
 
-<div class="alert alert-info">
-  Módulo de visitas en construcción.
-</div>
+<form method="POST" action="{{ url_for('nueva_visita') }}" enctype="multipart/form-data" class="card p-3 mb-4">
+  <div class="mb-2">
+    <label>Cliente *</label>
+    <input type="text" name="cliente" class="form-control" required>
+  </div>
+
+  <div class="mb-2">
+    <label>Comentarios *</label>
+    <textarea name="comentarios" class="form-control" required></textarea>
+  </div>
+
+  <div class="mb-2">
+    <label>Próxima visita</label>
+    <input type="date" name="proxima_visita" class="form-control">
+  </div>
+
+  <div class="mb-2">
+    <label>Fotos (mínimo 2) *</label>
+    <input type="file" name="fotos" class="form-control" multiple accept="image/*" required>
+  </div>
+
+  <button class="btn btn-primary mt-2">Guardar visita</button>
+</form>
+
+<h4>Mis visitas</h4>
+<table class="table table-striped">
+  <tr>
+    <th>Fecha</th>
+    <th>Cliente</th>
+    <th>Comentarios</th>
+  </tr>
+  {% for v in visitas %}
+  <tr>
+    <td>{{ v.fecha }}</td>
+    <td>{{ v.cliente }}</td>
+    <td>{{ v.comentarios }}</td>
+  </tr>
+  {% endfor %}
+</table>
 
 {% endblock %}
