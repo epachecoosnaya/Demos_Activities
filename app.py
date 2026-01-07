@@ -189,3 +189,18 @@ def nueva_visita():
 
     conn.commit()
     return redirect(url_for("visitas"))
+
+# -------------------------
+# CAMBIAR PASSWORD
+# -------------------------
+@app.route("/cambiar-password", methods=["GET"])
+def cambiar_password():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    return render_template(
+        "cambiar_password.html",
+        empresa=EMPRESA,
+        logo=LOGO
+    )
+
