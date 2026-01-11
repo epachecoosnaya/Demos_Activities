@@ -1,174 +1,309 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h3 class="mb-3">Visitas</h3>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Visitas</h2>
+  <a class="btn btn-secondary" href="{{ url_for('dashboard') }}">Dashboard</a>
+</div>
 
-<form id="formVisita" method="POST" action="{{ url_for('visitas') }}" enctype="multipart/form-data">
-  <div class="card p-3 mb-4">
-
-    <div class="mb-3">
-      <label class="form-label">Cliente *</label>
-      <input type="text" name="cliente" class="form-control" required>
+<!-- POP / Modal de error -->
+<div class="modal fade" id="modalError" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Falta información</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="modalErrorMsg">
+        <!-- msg -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Ok</button>
+      </div>
     </div>
-
-    <div class="mb-3">
-      <label class="form-label">Comentarios *</label>
-      <textarea name="comentarios" class="form-control" required></textarea>
-    </div>
-
-    <div class="mb-3">
-      <label class="form-label">Fotos (mínimo 2) *</label>
-      <input type="file" name="fotos" id="fotos" class="form-control" multiple accept="image/*" required>
-    </div>
-
-    <input type="hidden" name="firma" id="firma_input">
-
-    <button type="button" class="btn btn-primary" id="btnAbrirFirma">
-      Registrar visita
-    </button>
-
   </div>
-</form>
+</div>
 
 <!-- MODAL FIRMA -->
-<div class="modal fade" id="modalFirma" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
+<div class="modal fade" id="modalFirma" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
-
       <div class="modal-header">
         <h5 class="modal-title">Firma de conformidad</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
 
       <div class="modal-body">
-        <p class="text-muted">Firma con el dedo o mouse (obligatoria)</p>
+        <p class="mb-2">Firma con el dedo o mouse (obligatoria)</p>
 
-        <canvas id="canvasFirma"
-          width="600"
-          height="250"
-          style="border:1px solid #ccc; width:100%; touch-action:none;">
-        </canvas>
+        <div class="border rounded p-2 bg-white">
+          <canvas id="firmaCanvas" style="width: 100%; height: 280px; touch-action: none;"></canvas>
+        </div>
 
-        <button type="button" class="btn btn-outline-secondary mt-2" onclick="limpiarFirma()">
-          Limpiar
-        </button>
+        <div class="d-flex gap-2 mt-3">
+          <button type="button" class="btn btn-outline-secondary" id="btnLimpiarFirma">Limpiar</button>
+        </div>
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn btn-success" id="btnGuardarFirma">
-          Confirmar y guardar
-        </button>
+        <button type="button" class="btn btn-success" id="btnConfirmarFirma">Confirmar y guardar</button>
       </div>
-
     </div>
   </div>
 </div>
 
-<!-- TOAST -->
-<div class="position-fixed bottom-0 end-0 p-3" style="z-index:9999">
-  <div id="toastError" class="toast text-bg-danger border-0">
-    <div class="toast-body" id="toastMsg"></div>
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h5 class="card-title mb-3">Registrar visita</h5>
+
+    <!-- OJO: POST va a /visitas/nueva -->
+    <form id="formVisita" method="POST" action="{{ url_for('nueva_visita') }}" enctype="multipart/form-data">
+      <div class="row g-3">
+        <div class="col-12 col-md-4">
+          <label class="form-label">Fecha</label>
+          <input class="form-control" value="{{ now() }}" readonly>
+        </div>
+
+        <div class="col-12 col-md-8">
+          <label class="form-label">Cliente <span class="text-danger">*</span></label>
+          <input class="form-control" name="cliente" id="cliente" required>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">Comentarios <span class="text-danger">*</span></label>
+          <textarea class="form-control" rows="3" name="comentarios" id="comentarios" required></textarea>
+        </div>
+
+        <!-- AQUÍ regresamos Próxima visita -->
+        <div class="col-12 col-md-4">
+          <label class="form-label">Próxima visita</label>
+          <input type="date" class="form-control" name="proxima_visita" id="proxima_visita">
+        </div>
+
+        <div class="col-12 col-md-8">
+          <label class="form-label">Fotos (mínimo 2) <span class="text-danger">*</span></label>
+          <input type="file" class="form-control" name="fotos" id="fotos" accept="image/*" multiple required>
+          <div class="form-text">Puedes seleccionar 2 o más fotos.</div>
+        </div>
+
+        <!-- Aquí guardamos la firma en base64 -->
+        <input type="hidden" name="firma_data" id="firma_data">
+
+        <div class="col-12 d-flex justify-content-end">
+          <!-- Este botón NO hace submit; abre la firma -->
+          <button type="button" class="btn btn-primary" id="btnRegistrar">
+            Registrar visita
+          </button>
+        </div>
+      </div>
+    </form>
   </div>
 </div>
 
+<div class="card shadow-sm">
+  <div class="card-body">
+    <h5 class="card-title mb-3">Historial</h5>
+
+    <div class="table-responsive">
+      <table class="table table-striped align-middle">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Usuario</th>
+            <th>Cliente</th>
+            <th>Comentarios</th>
+            <th>Fotos</th>
+            <th>Firma</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in visitas %}
+          <tr>
+            <td>{{ v.fecha }}</td>
+            <td>{{ v.usuario }}</td>
+            <td>{{ v.cliente }}</td>
+            <td style="min-width:220px">{{ v.comentarios }}</td>
+
+            <td>
+              {% set fotos = fotos_por_act.get(v.id, []) %}
+              {% if fotos|length == 0 %}
+                <span class="text-muted">—</span>
+              {% else %}
+                <div class="d-flex flex-wrap gap-2">
+                  {% for f in fotos %}
+                    <a href="{{ url_for('static', filename=f.archivo) }}" target="_blank">
+                      <img src="{{ url_for('static', filename=f.archivo) }}" style="height:48px;width:48px;object-fit:cover;border-radius:8px;border:1px solid #ddd;">
+                    </a>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if v.firma_archivo %}
+                <a href="{{ url_for('static', filename=v.firma_archivo) }}" target="_blank" class="btn btn-sm btn-outline-success">
+                  Ver
+                </a>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap JS (necesario para modals) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+  // -------------------------
+  // POP error
+  // -------------------------
+  const modalErrorEl = document.getElementById("modalError");
+  const modalError = new bootstrap.Modal(modalErrorEl);
+  const modalErrorMsg = document.getElementById("modalErrorMsg");
 
+  function showError(msg) {
+    modalErrorMsg.textContent = msg;
+    modalError.show();
+  }
+
+  // -------------------------
+  // Firma (Canvas) - FIX offset / mobile
+  // -------------------------
   const form = document.getElementById("formVisita");
-  const fotosInput = document.getElementById("fotos");
-  const btnAbrirFirma = document.getElementById("btnAbrirFirma");
-  const btnGuardarFirma = document.getElementById("btnGuardarFirma");
-  const modalFirma = new bootstrap.Modal(document.getElementById("modalFirma"));
+  const btnRegistrar = document.getElementById("btnRegistrar");
 
-  const canvas = document.getElementById("canvasFirma");
-  const ctx = canvas.getContext("2d");
+  const modalFirmaEl = document.getElementById("modalFirma");
+  const modalFirma = new bootstrap.Modal(modalFirmaEl);
+
+  const canvas = document.getElementById("firmaCanvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
   let dibujando = false;
-  let hayFirma = false;
+  let firmaHecha = false;
 
-  function pos(e) {
+  function resizeCanvas() {
+    // Ajusta tamaño real del canvas al tamaño visible (evita offset)
     const rect = canvas.getBoundingClientRect();
-    const touch = e.touches ? e.touches[0] : e;
+    const dpr = window.devicePixelRatio || 1;
+
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+
+    // Dibujar en coordenadas CSS (no device pixels)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#111";
+  }
+
+  // Llamar al abrir el modal (porque cambia el layout)
+  modalFirmaEl.addEventListener("shown.bs.modal", () => {
+    resizeCanvas();
+    // si venías de un intento anterior, no borramos automáticamente
+  });
+
+  // Helper: posición correcta en CSS pixels
+  function posFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    let clientX, clientY;
+
+    if (e.touches && e.touches.length) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
     return {
-      x: touch.clientX - rect.left,
-      y: touch.clientY - rect.top
+      x: clientX - rect.left,
+      y: clientY - rect.top
     };
   }
 
-  canvas.addEventListener("mousedown", e => {
-    dibujando = true;
-    hayFirma = true;
-    ctx.beginPath();
-    const p = pos(e);
-    ctx.moveTo(p.x, p.y);
-  });
-
-  canvas.addEventListener("mousemove", e => {
-    if (!dibujando) return;
-    const p = pos(e);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-  });
-
-  canvas.addEventListener("mouseup", () => dibujando = false);
-  canvas.addEventListener("mouseleave", () => dibujando = false);
-
-  canvas.addEventListener("touchstart", e => {
+  function startDraw(e) {
     e.preventDefault();
     dibujando = true;
-    hayFirma = true;
+    const p = posFromEvent(e);
     ctx.beginPath();
-    const p = pos(e);
     ctx.moveTo(p.x, p.y);
-  });
+  }
 
-  canvas.addEventListener("touchmove", e => {
-    e.preventDefault();
+  function moveDraw(e) {
     if (!dibujando) return;
-    const p = pos(e);
+    e.preventDefault();
+    const p = posFromEvent(e);
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
+    firmaHecha = true;
+  }
+
+  function endDraw(e) {
+    if (!dibujando) return;
+    e.preventDefault();
+    dibujando = false;
+    ctx.closePath();
+  }
+
+  // Mouse
+  canvas.addEventListener("mousedown", startDraw);
+  canvas.addEventListener("mousemove", moveDraw);
+  window.addEventListener("mouseup", endDraw);
+
+  // Touch
+  canvas.addEventListener("touchstart", startDraw, { passive: false });
+  canvas.addEventListener("touchmove", moveDraw, { passive: false });
+  canvas.addEventListener("touchend", endDraw, { passive: false });
+
+  // Limpiar firma
+  document.getElementById("btnLimpiarFirma").addEventListener("click", () => {
+    // Limpia TODO (en device pixels)
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Re-aplica transform correcto
+    resizeCanvas();
+    firmaHecha = false;
   });
 
-  canvas.addEventListener("touchend", () => dibujando = false);
+  // -------------------------
+  // Flujo:
+  // 1) Validar datos + 2 fotos
+  // 2) Abrir modal firma
+  // 3) Confirmar -> valida que haya firma -> set hidden firma_data -> submit
+  // -------------------------
+  btnRegistrar.addEventListener("click", () => {
+    const cliente = document.getElementById("cliente").value.trim();
+    const comentarios = document.getElementById("comentarios").value.trim();
+    const fotos = document.getElementById("fotos").files;
 
-  btnAbrirFirma.addEventListener("click", () => {
+    if (!cliente) return showError("El campo Cliente es obligatorio.");
+    if (!comentarios) return showError("El campo Comentarios es obligatorio.");
+    if (!fotos || fotos.length < 2) return showError("Debes subir mínimo 2 fotos.");
 
-    if (!form.checkValidity()) {
-      form.reportValidity();
-      return;
-    }
-
-    if (!fotosInput.files || fotosInput.files.length < 2) {
-      showToast("Debes subir al menos 2 fotos.");
-      return;
-    }
-
+    // Abre firma al final
     modalFirma.show();
   });
 
-  btnGuardarFirma.addEventListener("click", () => {
-
-    if (!hayFirma) {
-      showToast("La firma es obligatoria.");
-      return;
+  document.getElementById("btnConfirmarFirma").addEventListener("click", () => {
+    if (!firmaHecha) {
+      return showError("La firma es obligatoria. Por favor firma antes de guardar.");
     }
 
-    document.getElementById("firma_input").value = canvas.toDataURL("image/png");
+    // Guardar firma como dataURL
+    const dataURL = canvas.toDataURL("image/png");
+    document.getElementById("firma_data").value = dataURL;
+
+    // Cerrar modal y enviar
+    modalFirma.hide();
     form.submit();
   });
-
-  window.limpiarFirma = function () {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    hayFirma = false;
-  };
-
-  function showToast(msg) {
-    document.getElementById("toastMsg").innerText = msg;
-    new bootstrap.Toast(document.getElementById("toastError")).show();
-  }
-
-});
 </script>
 
 {% endblock %}
