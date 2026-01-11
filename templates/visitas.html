@@ -153,122 +153,41 @@
 </div>
 
 <script>
-  // ---------- TOAST helper ----------
-  function showToast(message, type="danger") {
-    const container = document.querySelector(".toast-container");
-    const div = document.createElement("div");
-    div.className = `toast align-items-center text-bg-${type} border-0 mb-2`;
-    div.setAttribute("role","alert");
-    div.setAttribute("aria-live","assertive");
-    div.setAttribute("aria-atomic","true");
-    div.innerHTML = `
-      <div class="d-flex">
-        <div class="toast-body">${message}</div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-      </div>
-    `;
-    container.appendChild(div);
-    new bootstrap.Toast(div, { delay: 3500 }).show();
-  }
+document.addEventListener("DOMContentLoaded", function () {
 
-  // Mostrar toasts que vienen del servidor
-  document.querySelectorAll(".toast").forEach(t => new bootstrap.Toast(t, { delay: 3500 }).show());
-
-  // ---------- VALIDACIÓN + MODAL ----------
   const form = document.getElementById("formVisita");
   const fotosInput = document.getElementById("fotos");
   const btnAbrirFirma = document.getElementById("btnAbrirFirma");
+
+  if (!btnAbrirFirma) {
+    console.error("❌ No se encontró btnAbrirFirma");
+    return;
+  }
 
   const modalEl = document.getElementById("modalFirma");
   const modalFirma = new bootstrap.Modal(modalEl);
 
   btnAbrirFirma.addEventListener("click", () => {
-    // 1) Validación HTML5 (required) aunque sea button
+
+    // Validación HTML
     if (!form.checkValidity()) {
       form.reportValidity();
       return;
     }
 
-    // 2) Validar mínimo 2 fotos (pop)
-    const files = fotosInput.files || [];
-    if (files.length < 2) {
+    // Validar fotos
+    if (!fotosInput.files || fotosInput.files.length < 2) {
       showToast("Debes subir mínimo 2 fotos.", "danger");
       return;
     }
 
-    // 3) Abrir modal para firmar (solo aquí)
+    // Abrir modal
     modalFirma.show();
   });
 
-  // ---------- FIRMA ----------
-  const canvas = document.getElementById("canvasFirma");
-  const ctx = canvas.getContext("2d");
-
-  let drawing = false;
-
-  function getPos(evt) {
-    const rect = canvas.getBoundingClientRect();
-    if (evt.touches && evt.touches[0]) {
-      return {
-        x: evt.touches[0].clientX - rect.left,
-        y: evt.touches[0].clientY - rect.top
-      };
-    }
-    return { x: evt.offsetX, y: evt.offsetY };
-  }
-
-  function startDraw(e) {
-    drawing = true;
-    ctx.beginPath();
-    const p = getPos(e);
-    ctx.moveTo(p.x, p.y);
-  }
-
-  function moveDraw(e) {
-    if (!drawing) return;
-    const p = getPos(e);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-  }
-
-  function endDraw() {
-    drawing = false;
-  }
-
-  // Mouse
-  canvas.addEventListener("mousedown", startDraw);
-  canvas.addEventListener("mousemove", moveDraw);
-  canvas.addEventListener("mouseup", endDraw);
-  canvas.addEventListener("mouseleave", endDraw);
-
-  // Touch
-  canvas.addEventListener("touchstart", (e) => { e.preventDefault(); startDraw(e); }, {passive:false});
-  canvas.addEventListener("touchmove", (e) => { e.preventDefault(); moveDraw(e); }, {passive:false});
-  canvas.addEventListener("touchend", endDraw);
-
-  document.getElementById("btnLimpiarFirma").addEventListener("click", () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  });
-
-  function firmaVacia() {
-    const data = ctx.getImageData(0,0,canvas.width,canvas.height).data;
-    for (let i = 3; i < data.length; i += 4) {
-      if (data[i] !== 0) return false;
-    }
-    return true;
-  }
-
-  document.getElementById("btnConfirmarFirma").addEventListener("click", () => {
-    if (firmaVacia()) {
-      showToast("La firma es obligatoria.", "danger");
-      return;
-    }
-
-    // Guardar firma en hidden y enviar ahora sí
-    document.getElementById("firma_data").value = canvas.toDataURL("image/png");
-    modalFirma.hide();
-    form.submit();
-  });
+  // 👉 TODO el código de firma va aquí dentro
+});
 </script>
+
 
 {% endblock %}
