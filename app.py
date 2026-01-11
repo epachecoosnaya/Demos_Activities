@@ -359,24 +359,30 @@ def nueva_visita():
     cliente = (request.form.get("cliente") or "").strip()
     comentarios = (request.form.get("comentarios") or "").strip()
     proxima = request.form.get("proxima_visita") or None
+    firma_base64 = request.form.get("firma")
 
     if not cliente or not comentarios:
         return "Cliente y comentarios son obligatorios", 400
 
+    # ---------- VALIDAR FOTOS ----------
     fotos = request.files.getlist("fotos")
     fotos = [f for f in fotos if f and f.filename]
 
     if len(fotos) < 2:
         return "Debes subir mínimo 2 fotos", 400
 
-    # Validación extensiones
     for f in fotos:
         if not allowed_file(f.filename):
-            return "Formato de imagen inválido (usa png/jpg/jpeg/webp)", 400
+            return "Formato de imagen inválido", 400
+
+    # ---------- VALIDAR FIRMA ----------
+    if not firma_base64 or len(firma_base64) < 1000:
+        return "La firma es obligatoria", 400
 
     conn = get_db()
     cur = conn.cursor()
 
+    # ---------- CREAR ACTIVIDAD ----------
     cur.execute("""
         INSERT INTO actividades (usuario_id, fecha, cliente, comentarios, proxima_visita)
         VALUES (?, ?, ?, ?, ?)
@@ -387,26 +393,49 @@ def nueva_visita():
         comentarios,
         proxima
     ))
+
     actividad_id = cur.lastrowid
 
+    # ---------- CREAR CARPETA ----------
     carpeta_rel = f"uploads/actividad_{actividad_id}"
     carpeta_abs = os.path.join("static", carpeta_rel)
     os.makedirs(carpeta_abs, exist_ok=True)
 
+    # ---------- GUARDAR FOTOS ----------
     for f in fotos:
-        base = secure_filename(f.filename)
-        # Evita colisiones
-        nombre_final = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{base}"
+        nombre = secure_filename(f.filename)
+        nombre_final = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{nombre}"
         ruta_abs = os.path.join(carpeta_abs, nombre_final)
         f.save(ruta_abs)
 
-        ruta_rel = f"/static/{carpeta_rel}/{nombre_final}"  # para usar directo en <img src="">
-        cur.execute("INSERT INTO fotos (actividad_id, archivo) VALUES (?, ?)", (actividad_id, ruta_rel))
+        ruta_rel = f"/static/{carpeta_rel}/{nombre_final}"
+        cur.execute(
+            "INSERT INTO fotos (actividad_id, archivo) VALUES (?, ?)",
+            (actividad_id, ruta_rel)
+        )
+
+    # ---------- GUARDAR FIRMA ----------
+    import base64
+
+    header, encoded = firma_base64.split(",", 1)
+    firma_bytes = base64.b64decode(encoded)
+
+    firma_abs = os.path.join(carpeta_abs, "firma.png")
+    firma_rel = f"/static/{carpeta_rel}/firma.png"
+
+    with open(firma_abs, "wb") as f:
+        f.write(firma_bytes)
+
+    cur.execute(
+        "UPDATE actividades SET firma=? WHERE id=?",
+        (firma_rel, actividad_id)
+    )
 
     conn.commit()
     conn.close()
 
     return redirect(url_for("visitas"))
+
 
 # -------------------------
 # MAIN
