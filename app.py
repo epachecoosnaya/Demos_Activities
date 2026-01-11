@@ -86,6 +86,8 @@ def init_db():
 
 init_db()
 
+ALTER TABLE actividades ADD COLUMN firma TEXT;
+
 def allowed_file(filename: str) -> bool:
     if not filename or "." not in filename:
         return False
