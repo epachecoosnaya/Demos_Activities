@@ -1,12 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for, session, abort, flash
-import sqlite3, os
+import sqlite3, os, base64, uuid
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
-# -------------------------
-# APP CONFIG
-# -------------------------
 app = Flask(__name__)
 app.secret_key = "super_secreto_demo"
 app.permanent_session_lifetime = timedelta(hours=8)
@@ -14,22 +11,30 @@ app.permanent_session_lifetime = timedelta(hours=8)
 EMPRESA = "Altasolucion"
 LOGO = "logo.png"
 
-# En Render, ":memory:" te rompe todo porque reinicia y no persiste.
-# Usamos archivo en /tmp (en free puede reiniciarse, pero al menos no se borra en cada request).
-DB_PATH = os.environ.get("DB_PATH", "/tmp/actividades.db")
+DB = ":memory:"
+db_conn = None
 
-UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "static/uploads")
+UPLOAD_FOLDER = "static/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+ALLOWED_EXT = {"png", "jpg", "jpeg", "webp"}
+
 
 # -------------------------
-# DB HELPERS
+# DB
 # -------------------------
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    global db_conn
+    if db_conn is None:
+        db_conn = sqlite3.connect(DB, check_same_thread=False)
+        db_conn.row_factory = sqlite3.Row
+    return db_conn
+
+
+def column_exists(conn, table, column):
+    cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(c["name"] == column for c in cols)
+
 
 def init_db():
     conn = get_db()
@@ -37,91 +42,90 @@ def init_db():
     conn.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario TEXT UNIQUE NOT NULL,
+            usuario TEXT UNIQUE,
             nombre TEXT,
             apellido TEXT,
-            email TEXT UNIQUE,
-            password TEXT NOT NULL,
-            rol TEXT NOT NULL,          -- 'admin' | 'vendedor'
-            activo INTEGER NOT NULL DEFAULT 1,
-            fecha_creacion TEXT NOT NULL
+            email TEXT,
+            password TEXT,
+            rol TEXT,
+            activo INTEGER
         )
     """)
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS actividades (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            fecha TEXT NOT NULL,
-            cliente TEXT NOT NULL,
-            comentarios TEXT NOT NULL,
-            proxima_visita TEXT,
-            FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
+            usuario_id INTEGER,
+            fecha TEXT,
+            cliente TEXT,
+            comentarios TEXT,
+            proxima_visita TEXT
         )
     """)
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS fotos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            actividad_id INTEGER NOT NULL,
-            archivo TEXT NOT NULL,
-            FOREIGN KEY(actividad_id) REFERENCES actividades(id)
+            actividad_id INTEGER,
+            archivo TEXT
         )
     """)
 
-    # Seed admin/demo si no existen
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    conn.execute("""
-        INSERT OR IGNORE INTO usuarios (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
-        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-    """, ("admin", "Admin", "Sistema", "admin@demo.com", generate_password_hash("admin123"), "admin", now))
+    # Migración segura: agregar firma_archivo si no existe
+    if not column_exists(conn, "actividades", "firma_archivo"):
+        conn.execute("ALTER TABLE actividades ADD COLUMN firma_archivo TEXT")
 
+    # Admin
     conn.execute("""
-        INSERT OR IGNORE INTO usuarios (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
-        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-    """, ("demo", "Demo", "Vendedor", "demo@demo.com", generate_password_hash("1234"), "vendedor", now))
+        INSERT OR IGNORE INTO usuarios
+        (usuario, nombre, apellido, email, password, rol, activo)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        "admin", "Admin", "Sistema", "admin@demo.com",
+        generate_password_hash("admin123"),
+        "admin", 1
+    ))
+
+    # Demo vendedor
+    conn.execute("""
+        INSERT OR IGNORE INTO usuarios
+        (usuario, nombre, apellido, email, password, rol, activo)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        "demo", "Demo", "Vendedor", "demo@demo.com",
+        generate_password_hash("1234"),
+        "vendedor", 1
+    ))
 
     conn.commit()
-    conn.close()
+
 
 init_db()
 
-ALTER TABLE actividades ADD COLUMN firma TEXT;
-
-def allowed_file(filename: str) -> bool:
-    if not filename or "." not in filename:
-        return False
-    ext = filename.rsplit(".", 1)[1].lower()
-    return ext in ALLOWED_EXTENSIONS
 
 # -------------------------
-# CONTEXT (now())
+# CONTEXT
 # -------------------------
 @app.context_processor
 def inject_now():
     return {"now": lambda: datetime.now().strftime("%Y-%m-%d %H:%M")}
 
-# -------------------------
-# AUTH
-# -------------------------
-@app.route("/", methods=["GET"])
-def root():
-    return redirect(url_for("login"))
 
-@app.route("/login", methods=["GET", "POST"])
+# -------------------------
+# LOGIN / LOGOUT
+# -------------------------
+@app.route("/", methods=["GET", "POST"])
 def login():
     error = None
 
     if request.method == "POST":
-        u = (request.form.get("usuario") or "").strip()
-        p = request.form.get("password") or ""
+        u = request.form.get("usuario", "").strip()
+        p = request.form.get("password", "").strip()
 
         conn = get_db()
-        user = conn.execute(
-            "SELECT * FROM usuarios WHERE usuario=? AND activo=1",
-            (u,)
-        ).fetchone()
-        conn.close()
+        user = conn.execute("""
+            SELECT * FROM usuarios WHERE usuario=? AND activo=1
+        """, (u,)).fetchone()
 
         if user and check_password_hash(user["password"], p):
             session.permanent = True
@@ -135,10 +139,12 @@ def login():
 
     return render_template("login.html", empresa=EMPRESA, logo=LOGO, error=error)
 
+
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
 
 # -------------------------
 # DASHBOARD
@@ -152,12 +158,135 @@ def dashboard():
         "dashboard.html",
         empresa=EMPRESA,
         logo=LOGO,
-        rol=session.get("rol"),
-        login_time=session.get("login_time")
+        rol=session["rol"]
     )
 
+
 # -------------------------
-# CAMBIAR PASSWORD (USUARIO LOGUEADO)
+# VISITAS (LISTA)
+# -------------------------
+@app.route("/visitas")
+def visitas():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    conn = get_db()
+
+    if session.get("rol") == "admin":
+        actividades = conn.execute("""
+            SELECT a.*, u.usuario
+            FROM actividades a
+            JOIN usuarios u ON u.id = a.usuario_id
+            ORDER BY a.id DESC
+        """).fetchall()
+    else:
+        actividades = conn.execute("""
+            SELECT a.*, u.usuario
+            FROM actividades a
+            JOIN usuarios u ON u.id = a.usuario_id
+            WHERE a.usuario_id=?
+            ORDER BY a.id DESC
+        """, (session["user_id"],)).fetchall()
+
+    # Fotos por actividad
+    fotos_map = {}
+    for a in actividades:
+        fotos = conn.execute("""
+            SELECT * FROM fotos WHERE actividad_id=? ORDER BY id ASC
+        """, (a["id"],)).fetchall()
+        fotos_map[a["id"]] = fotos
+
+    return render_template(
+        "visitas.html",
+        empresa=EMPRESA,
+        logo=LOGO,
+        rol=session.get("rol"),
+        actividades=actividades,
+        fotos_map=fotos_map
+    )
+
+
+def allowed_file(filename: str) -> bool:
+    if "." not in filename:
+        return False
+    ext = filename.rsplit(".", 1)[1].lower()
+    return ext in ALLOWED_EXT
+
+
+# -------------------------
+# VISITAS (CREAR) - valida 2 fotos + firma
+# -------------------------
+@app.route("/visitas/nueva", methods=["POST"])
+def nueva_visita():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    cliente = request.form.get("cliente", "").strip()
+    comentarios = request.form.get("comentarios", "").strip()
+    proxima_visita = request.form.get("proxima_visita", "").strip()
+
+    # Fotos
+    files = request.files.getlist("fotos")
+    files_valid = [f for f in files if f and f.filename and allowed_file(f.filename)]
+
+    if len(files_valid) < 2:
+        flash("Debes subir mínimo 2 fotos válidas (jpg/png/webp).", "danger")
+        return redirect(url_for("visitas"))
+
+    # Firma (base64)
+    firma_data = request.form.get("firma_data", "").strip()
+    if not firma_data.startswith("data:image/png;base64,"):
+        flash("La firma es obligatoria. Vuelve a registrar la visita y firma.", "danger")
+        return redirect(url_for("visitas"))
+
+    # Guardar actividad
+    conn = get_db()
+    fecha = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    cur = conn.execute("""
+        INSERT INTO actividades (usuario_id, fecha, cliente, comentarios, proxima_visita, firma_archivo)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (session["user_id"], fecha, cliente, comentarios, proxima_visita, None))
+    actividad_id = cur.lastrowid
+
+    # Guardar fotos
+    for idx, f in enumerate(files_valid, start=1):
+        original = secure_filename(f.filename)
+        ext = original.rsplit(".", 1)[1].lower()
+        fname = f"actividad_{actividad_id}_{idx}_{uuid.uuid4().hex}.{ext}"
+        path = os.path.join(UPLOAD_FOLDER, fname)
+        f.save(path)
+
+        conn.execute("""
+            INSERT INTO fotos (actividad_id, archivo)
+            VALUES (?, ?)
+        """, (actividad_id, fname))
+
+    # Guardar firma
+    try:
+        b64 = firma_data.split(",", 1)[1]
+        firma_bytes = base64.b64decode(b64)
+        firma_name = f"firma_{actividad_id}_{uuid.uuid4().hex}.png"
+        firma_path = os.path.join(UPLOAD_FOLDER, firma_name)
+        with open(firma_path, "wb") as out:
+            out.write(firma_bytes)
+
+        conn.execute("""
+            UPDATE actividades SET firma_archivo=? WHERE id=?
+        """, (firma_name, actividad_id))
+    except Exception:
+        # Si falla la firma, no rompas con 500: avisa y redirige
+        flash("Ocurrió un error guardando la firma. Intenta de nuevo.", "danger")
+        conn.commit()
+        return redirect(url_for("visitas"))
+
+    conn.commit()
+    flash("Visita registrada correctamente ✅", "success")
+    return redirect(url_for("visitas"))
+
+
+# -------------------------
+# CAMBIAR PASSWORD (USUARIO)
 # -------------------------
 @app.route("/cambiar-password", methods=["GET", "POST"])
 def cambiar_password():
@@ -172,25 +301,23 @@ def cambiar_password():
         nuevo = request.form.get("nuevo", "")
         confirmar = request.form.get("confirmar", "")
 
-        if len(nuevo) < 6:
-            error = "El password nuevo debe tener mínimo 6 caracteres"
-        elif nuevo != confirmar:
+        if nuevo != confirmar:
             error = "El nuevo password no coincide"
         else:
             conn = get_db()
-            user = conn.execute("SELECT * FROM usuarios WHERE id=?", (session["user_id"],)).fetchone()
+            user = conn.execute(
+                "SELECT * FROM usuarios WHERE id=?",
+                (session["user_id"],)
+            ).fetchone()
 
             if not user or not check_password_hash(user["password"], actual):
                 error = "Password actual incorrecto"
             else:
-                conn.execute(
-                    "UPDATE usuarios SET password=? WHERE id=?",
-                    (generate_password_hash(nuevo), session["user_id"])
-                )
+                conn.execute("""
+                    UPDATE usuarios SET password=? WHERE id=?
+                """, (generate_password_hash(nuevo), session["user_id"]))
                 conn.commit()
                 msg = "Password actualizado correctamente"
-
-            conn.close()
 
     return render_template(
         "cambiar_password.html",
@@ -200,245 +327,6 @@ def cambiar_password():
         error=error
     )
 
-# -------------------------
-# USUARIOS (ADMIN)
-# -------------------------
-@app.route("/usuarios", methods=["GET"])
-def usuarios():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-    if session.get("rol") != "admin":
-        return redirect(url_for("dashboard"))
 
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT id, usuario, nombre, apellido, email, rol, activo, fecha_creacion
-        FROM usuarios
-        ORDER BY fecha_creacion DESC
-    """).fetchall()
-    conn.close()
-
-    return render_template(
-        "usuarios.html",
-        empresa=EMPRESA,
-        logo=LOGO,
-        usuarios=rows
-    )
-
-@app.route("/usuarios/crear", methods=["POST"])
-def crear_usuario():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-    if session.get("rol") != "admin":
-        abort(403)
-
-    usuario = (request.form.get("usuario") or "").strip()
-    nombre = (request.form.get("nombre") or "").strip()
-    apellido = (request.form.get("apellido") or "").strip()
-    email = (request.form.get("email") or "").strip()
-    password = request.form.get("password") or ""
-    rol = request.form.get("rol") or "vendedor"
-
-    if not usuario or not nombre or not apellido or not email or not password:
-        flash("Todos los campos son obligatorios para crear usuario.", "danger")
-        return redirect(url_for("usuarios"))
-
-    if rol not in ("admin", "vendedor"):
-        rol = "vendedor"
-
-    conn = get_db()
-    try:
-        conn.execute("""
-            INSERT INTO usuarios (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
-            VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-        """, (
-            usuario, nombre, apellido, email,
-            generate_password_hash(password),
-            rol,
-            datetime.now().strftime("%Y-%m-%d %H:%M")
-        ))
-        conn.commit()
-        flash("Usuario creado correctamente.", "success")
-    except sqlite3.IntegrityError:
-        flash("Ese usuario o email ya existe.", "danger")
-    finally:
-        conn.close()
-
-    return redirect(url_for("usuarios"))
-
-@app.route("/usuarios/guardar", methods=["POST"])
-def guardar_usuario():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-    if session.get("rol") != "admin":
-        abort(403)
-
-    uid = request.form.get("id")
-    nombre = (request.form.get("nombre") or "").strip()
-    apellido = (request.form.get("apellido") or "").strip()
-    email = (request.form.get("email") or "").strip()
-    rol = request.form.get("rol") or "vendedor"
-    activo = 1 if request.form.get("activo") else 0
-
-    if rol not in ("admin", "vendedor"):
-        rol = "vendedor"
-
-    conn = get_db()
-    try:
-        conn.execute("""
-            UPDATE usuarios
-            SET nombre=?, apellido=?, email=?, rol=?, activo=?
-            WHERE id=?
-        """, (nombre, apellido, email, rol, activo, uid))
-        conn.commit()
-        flash("Usuario actualizado.", "success")
-    except sqlite3.IntegrityError:
-        flash("No se pudo guardar: email duplicado.", "danger")
-    finally:
-        conn.close()
-
-    return redirect(url_for("usuarios"))
-
-# -------------------------
-# VISITAS
-# -------------------------
-@app.route("/visitas")
-def visitas():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-
-    conn = get_db()
-
-    if session.get("rol") == "admin":
-        rows = conn.execute("""
-            SELECT a.*, u.usuario
-            FROM actividades a
-            JOIN usuarios u ON u.id = a.usuario_id
-            ORDER BY a.fecha DESC
-        """).fetchall()
-    else:
-        rows = conn.execute("""
-            SELECT a.*
-            FROM actividades a
-            WHERE a.usuario_id=?
-            ORDER BY a.fecha DESC
-        """, (session["user_id"],)).fetchall()
-
-    # Fotos por actividad
-    actividad_ids = [r["id"] for r in rows]
-    fotos_map = {}
-    if actividad_ids:
-        q_marks = ",".join(["?"] * len(actividad_ids))
-        fotos = conn.execute(f"""
-            SELECT actividad_id, archivo
-            FROM fotos
-            WHERE actividad_id IN ({q_marks})
-            ORDER BY id ASC
-        """, actividad_ids).fetchall()
-
-        for f in fotos:
-            fotos_map.setdefault(f["actividad_id"], []).append(f["archivo"])
-
-    conn.close()
-
-    return render_template(
-        "visitas.html",
-        empresa=EMPRESA,
-        logo=LOGO,
-        rol=session.get("rol"),
-        visitas=rows,          # para tu visitas.html actual (más simple)
-        actividades=rows,      # por si estás usando el otro template
-        fotos_map=fotos_map    # para que luego muestres thumbnails si quieres
-    )
-
-@app.route("/visitas/nueva", methods=["POST"])
-def nueva_visita():
-    if "user_id" not in session:
-        abort(403)
-
-    cliente = (request.form.get("cliente") or "").strip()
-    comentarios = (request.form.get("comentarios") or "").strip()
-    proxima = request.form.get("proxima_visita") or None
-    firma_base64 = request.form.get("firma")
-
-    if not cliente or not comentarios:
-        return "Cliente y comentarios son obligatorios", 400
-
-    # ---------- VALIDAR FOTOS ----------
-    fotos = request.files.getlist("fotos")
-    fotos = [f for f in fotos if f and f.filename]
-
-    if len(fotos) < 2:
-        return "Debes subir mínimo 2 fotos", 400
-
-    for f in fotos:
-        if not allowed_file(f.filename):
-            return "Formato de imagen inválido", 400
-
-    # ---------- VALIDAR FIRMA ----------
-    if not firma_base64 or len(firma_base64) < 1000:
-        return "La firma es obligatoria", 400
-
-    conn = get_db()
-    cur = conn.cursor()
-
-    # ---------- CREAR ACTIVIDAD ----------
-    cur.execute("""
-        INSERT INTO actividades (usuario_id, fecha, cliente, comentarios, proxima_visita)
-        VALUES (?, ?, ?, ?, ?)
-    """, (
-        session["user_id"],
-        datetime.now().strftime("%Y-%m-%d %H:%M"),
-        cliente,
-        comentarios,
-        proxima
-    ))
-
-    actividad_id = cur.lastrowid
-
-    # ---------- CREAR CARPETA ----------
-    carpeta_rel = f"uploads/actividad_{actividad_id}"
-    carpeta_abs = os.path.join("static", carpeta_rel)
-    os.makedirs(carpeta_abs, exist_ok=True)
-
-    # ---------- GUARDAR FOTOS ----------
-    for f in fotos:
-        nombre = secure_filename(f.filename)
-        nombre_final = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{nombre}"
-        ruta_abs = os.path.join(carpeta_abs, nombre_final)
-        f.save(ruta_abs)
-
-        ruta_rel = f"/static/{carpeta_rel}/{nombre_final}"
-        cur.execute(
-            "INSERT INTO fotos (actividad_id, archivo) VALUES (?, ?)",
-            (actividad_id, ruta_rel)
-        )
-
-    # ---------- GUARDAR FIRMA ----------
-    import base64
-
-    header, encoded = firma_base64.split(",", 1)
-    firma_bytes = base64.b64decode(encoded)
-
-    firma_abs = os.path.join(carpeta_abs, "firma.png")
-    firma_rel = f"/static/{carpeta_rel}/firma.png"
-
-    with open(firma_abs, "wb") as f:
-        f.write(firma_bytes)
-
-    cur.execute(
-        "UPDATE actividades SET firma=? WHERE id=?",
-        (firma_rel, actividad_id)
-    )
-
-    conn.commit()
-    conn.close()
-
-    return redirect(url_for("visitas"))
-
-
-# -------------------------
-# MAIN
-# -------------------------
 if __name__ == "__main__":
     app.run(debug=True)
