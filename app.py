@@ -1,11 +1,16 @@
-from flask import Flask, render_template, request, redirect, url_for, session, abort, flash
+from flask import (
+    Flask, render_template, request, redirect,
+    url_for, session, abort, flash
+)
 import sqlite3
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
-import os, base64, uuid
+import os
+import base64
+import uuid
 
 # -------------------------
-# APP CONFIG
+# APP
 # -------------------------
 app = Flask(__name__)
 app.secret_key = "super_secreto_demo"
@@ -14,23 +19,19 @@ app.permanent_session_lifetime = timedelta(hours=8)
 EMPRESA = "Altasolucion"
 LOGO = "logo.png"
 
-BASE_DIR = app.root_path
-DB = os.path.join(BASE_DIR, "data.db")
+# -------------------------
+# DATABASE (PERSISTENTE)
+# -------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "data.db")
 
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
-FIRMAS_FOLDER = os.path.join(BASE_DIR, "static", "firmas")
-
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(FIRMAS_FOLDER, exist_ok=True)
 
-# -------------------------
-# DB
-# -------------------------
 def get_db():
-    conn = sqlite3.connect(DB)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
-
 
 def init_db():
     conn = get_db()
@@ -69,7 +70,7 @@ def init_db():
     )
     """)
 
-    # ADMIN
+    # ADMIN POR DEFECTO
     conn.execute("""
     INSERT OR IGNORE INTO usuarios
     (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
@@ -80,20 +81,8 @@ def init_db():
         "admin", 1, datetime.now().strftime("%Y-%m-%d %H:%M")
     ))
 
-    # DEMO
-    conn.execute("""
-    INSERT OR IGNORE INTO usuarios
-    (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        "demo", "Demo", "Vendedor", "demo@demo.com",
-        generate_password_hash("1234"),
-        "vendedor", 1, datetime.now().strftime("%Y-%m-%d %H:%M")
-    ))
-
     conn.commit()
     conn.close()
-
 
 init_db()
 
@@ -110,7 +99,6 @@ def inject_now():
 @app.route("/")
 def inicio():
     return redirect(url_for("login"))
-
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -133,11 +121,10 @@ def login():
             session["usuario"] = user["usuario"]
             session["rol"] = user["rol"]
             return redirect(url_for("dashboard"))
-        else:
-            error = "Credenciales incorrectas"
+
+        error = "Credenciales incorrectas"
 
     return render_template("login.html", empresa=EMPRESA, logo=LOGO, error=error)
-
 
 @app.route("/logout")
 def logout():
@@ -178,6 +165,30 @@ def usuarios():
         usuarios=usuarios
     )
 
+@app.route("/usuarios/crear", methods=["POST"])
+def crear_usuario():
+    if session.get("rol") != "admin":
+        abort(403)
+
+    conn = get_db()
+    conn.execute("""
+    INSERT INTO usuarios
+    (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+    """, (
+        request.form["usuario"],
+        request.form["nombre"],
+        request.form["apellido"],
+        request.form["email"],
+        generate_password_hash(request.form["password"]),
+        request.form["rol"],
+        datetime.now().strftime("%Y-%m-%d %H:%M")
+    ))
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("usuarios"))
+
 # -------------------------
 # VISITAS
 # -------------------------
@@ -187,14 +198,12 @@ def visitas():
         return redirect(url_for("login"))
 
     conn = get_db()
-
     visitas = conn.execute("""
         SELECT v.*, u.usuario
         FROM visitas v
         JOIN usuarios u ON u.id = v.usuario_id
         ORDER BY v.fecha DESC
     """).fetchall()
-
     conn.close()
 
     return render_template(
@@ -204,33 +213,17 @@ def visitas():
         visitas=visitas
     )
 
-# -------------------------
-# GUARDAR VISITA
-# -------------------------
-@app.route("/visitas/guardar", methods=["POST"])
-def guardar_visita():
+@app.route("/visitas/nueva", methods=["POST"])
+def nueva_visita():
     if "user_id" not in session:
         abort(403)
 
-    fotos = request.files.getlist("fotos")
-    firma_data = request.form.get("firma")
+    fotos = request.files.getlist("fotos[]")
+    firma = request.form.get("firma")
 
-    if len(fotos) < 2:
-        flash("Debes subir al menos 2 fotos", "danger")
+    if not firma or len(fotos) < 2:
+        flash("Debes subir mínimo 2 fotos y firmar", "danger")
         return redirect(url_for("visitas"))
-
-    if not firma_data:
-        flash("La firma es obligatoria", "danger")
-        return redirect(url_for("visitas"))
-
-    # Guardar firma
-    firma_b64 = firma_data.split(",")[1]
-    firma_bytes = base64.b64decode(firma_b64)
-    firma_nombre = f"{uuid.uuid4()}.png"
-    firma_path = os.path.join(FIRMAS_FOLDER, firma_nombre)
-
-    with open(firma_path, "wb") as f:
-        f.write(firma_bytes)
 
     conn = get_db()
     cur = conn.cursor()
@@ -245,27 +238,22 @@ def guardar_visita():
         request.form["cliente"],
         request.form["comentarios"],
         request.form["proxima_visita"],
-        firma_nombre
+        firma
     ))
 
     visita_id = cur.lastrowid
 
-    for foto in fotos:
-        nombre = f"{uuid.uuid4()}_{foto.filename}"
-        ruta = os.path.join(UPLOAD_FOLDER, nombre)
-        foto.save(ruta)
+    for f in fotos:
+        filename = f"{uuid.uuid4().hex}_{f.filename}"
+        path = os.path.join(UPLOAD_FOLDER, filename)
+        f.save(path)
 
-        cur.execute("""
-        INSERT INTO fotos (visita_id, archivo)
-        VALUES (?, ?)
-        """, (visita_id, nombre))
+        cur.execute(
+            "INSERT INTO fotos (visita_id, archivo) VALUES (?, ?)",
+            (visita_id, filename)
+        )
 
     conn.commit()
     conn.close()
 
-    flash("Visita registrada correctamente", "success")
     return redirect(url_for("visitas"))
-
-# -------------------------
-if __name__ == "__main__":
-    app.run(debug=True)
