@@ -1,12 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for, session, abort
+from flask import Flask, render_template, request, redirect, url_for, session, abort, flash
 import sqlite3
 from datetime import datetime, timedelta
-import os
-import secrets
-import base64
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
+import os, base64, uuid
 
+# -------------------------
+# APP CONFIG
+# -------------------------
 app = Flask(__name__)
 app.secret_key = "super_secreto_demo"
 app.permanent_session_lifetime = timedelta(hours=8)
@@ -14,20 +14,20 @@ app.permanent_session_lifetime = timedelta(hours=8)
 EMPRESA = "Altasolucion"
 LOGO = "logo.png"
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "data.db")
+BASE_DIR = app.root_path
+DB = os.path.join(BASE_DIR, "data.db")
 
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
+FIRMAS_FOLDER = os.path.join(BASE_DIR, "static", "firmas")
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-ALLOWED_IMAGE_EXT = {"png", "jpg", "jpeg", "webp"}
-
+os.makedirs(FIRMAS_FOLDER, exist_ok=True)
 
 # -------------------------
-# DB helpers
+# DB
 # -------------------------
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -36,57 +36,55 @@ def init_db():
     conn = get_db()
 
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario TEXT UNIQUE,
-            nombre TEXT,
-            apellido TEXT,
-            email TEXT UNIQUE,
-            password TEXT,
-            rol TEXT,
-            activo INTEGER,
-            fecha_creacion TEXT
-        )
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario TEXT UNIQUE,
+        nombre TEXT,
+        apellido TEXT,
+        email TEXT UNIQUE,
+        password TEXT,
+        rol TEXT,
+        activo INTEGER,
+        fecha_creacion TEXT
+    )
     """)
 
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS actividades (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER,
-            fecha TEXT,
-            cliente TEXT,
-            comentarios TEXT,
-            proxima_visita TEXT,
-            firma_archivo TEXT,
-            FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
-        )
+    CREATE TABLE IF NOT EXISTS visitas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario_id INTEGER,
+        fecha TEXT,
+        cliente TEXT,
+        comentarios TEXT,
+        proxima_visita TEXT,
+        firma TEXT
+    )
     """)
 
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS fotos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            actividad_id INTEGER,
-            archivo TEXT,
-            FOREIGN KEY(actividad_id) REFERENCES actividades(id)
-        )
+    CREATE TABLE IF NOT EXISTS fotos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        visita_id INTEGER,
+        archivo TEXT
+    )
     """)
 
-    # Admin demo
+    # ADMIN
     conn.execute("""
-        INSERT OR IGNORE INTO usuarios
-        (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO usuarios
+    (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "admin", "Admin", "Sistema", "admin@demo.com",
         generate_password_hash("admin123"),
         "admin", 1, datetime.now().strftime("%Y-%m-%d %H:%M")
     ))
 
-    # Vendedor demo
+    # DEMO
     conn.execute("""
-        INSERT OR IGNORE INTO usuarios
-        (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO usuarios
+    (usuario, nombre, apellido, email, password, rol, activo, fecha_creacion)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         "demo", "Demo", "Vendedor", "demo@demo.com",
         generate_password_hash("1234"),
@@ -99,14 +97,15 @@ def init_db():
 
 init_db()
 
-
+# -------------------------
+# CONTEXT
+# -------------------------
 @app.context_processor
 def inject_now():
     return {"now": lambda: datetime.now().strftime("%Y-%m-%d %H:%M")}
 
-
 # -------------------------
-# Auth
+# AUTH
 # -------------------------
 @app.route("/")
 def inicio():
@@ -118,8 +117,8 @@ def login():
     error = None
 
     if request.method == "POST":
-        u = request.form.get("usuario", "").strip()
-        p = request.form.get("password", "")
+        u = request.form["usuario"]
+        p = request.form["password"]
 
         conn = get_db()
         user = conn.execute(
@@ -133,7 +132,6 @@ def login():
             session["user_id"] = user["id"]
             session["usuario"] = user["usuario"]
             session["rol"] = user["rol"]
-            session["login_time"] = datetime.now().strftime("%Y-%m-%d %H:%M")
             return redirect(url_for("dashboard"))
         else:
             error = "Credenciales incorrectas"
@@ -146,9 +144,8 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-
 # -------------------------
-# Dashboard
+# DASHBOARD
 # -------------------------
 @app.route("/dashboard")
 def dashboard():
@@ -159,12 +156,30 @@ def dashboard():
         "dashboard.html",
         empresa=EMPRESA,
         logo=LOGO,
-        rol=session.get("rol")
+        rol=session["rol"]
     )
 
+# -------------------------
+# USUARIOS (ADMIN)
+# -------------------------
+@app.route("/usuarios")
+def usuarios():
+    if session.get("rol") != "admin":
+        abort(403)
+
+    conn = get_db()
+    usuarios = conn.execute("SELECT * FROM usuarios").fetchall()
+    conn.close()
+
+    return render_template(
+        "usuarios.html",
+        empresa=EMPRESA,
+        logo=LOGO,
+        usuarios=usuarios
+    )
 
 # -------------------------
-# Visitas
+# VISITAS
 # -------------------------
 @app.route("/visitas")
 def visitas():
@@ -173,196 +188,84 @@ def visitas():
 
     conn = get_db()
 
-    if session.get("rol") == "admin":
-        rows = conn.execute("""
-            SELECT a.*, u.usuario
-            FROM actividades a
-            JOIN usuarios u ON u.id = a.usuario_id
-            ORDER BY a.fecha DESC
-        """).fetchall()
-    else:
-        rows = conn.execute("""
-            SELECT a.*, u.usuario
-            FROM actividades a
-            JOIN usuarios u ON u.id = a.usuario_id
-            WHERE a.usuario_id=?
-            ORDER BY a.fecha DESC
-        """, (session["user_id"],)).fetchall()
-
-    # fotos por actividad
-    fotos = conn.execute("""
-        SELECT * FROM fotos
-        ORDER BY id DESC
+    visitas = conn.execute("""
+        SELECT v.*, u.usuario
+        FROM visitas v
+        JOIN usuarios u ON u.id = v.usuario_id
+        ORDER BY v.fecha DESC
     """).fetchall()
 
     conn.close()
-
-    # agrupar fotos por actividad_id
-    fotos_por_act = {}
-    for f in fotos:
-        fotos_por_act.setdefault(f["actividad_id"], []).append(f)
 
     return render_template(
         "visitas.html",
         empresa=EMPRESA,
         logo=LOGO,
-        visitas=rows,
-        fotos_por_act=fotos_por_act,
-        rol=session.get("rol")
+        visitas=visitas
     )
 
-
-def _allowed_file(filename: str) -> bool:
-    if not filename:
-        return False
-    ext = filename.rsplit(".", 1)[-1].lower()
-    return ext in ALLOWED_IMAGE_EXT
-
-
-def _save_base64_signature(data_url: str) -> str:
-    """
-    data_url: "data:image/png;base64,AAAA..."
-    returns relative path like "uploads/firma_xxx.png"
-    """
-    if not data_url or "base64," not in data_url:
-        raise ValueError("Firma inválida")
-
-    header, b64 = data_url.split("base64,", 1)
-    if "image/png" not in header:
-        # forzamos png desde canvas normalmente
-        pass
-
-    raw = base64.b64decode(b64)
-    fname = f"firma_{secrets.token_hex(12)}.png"
-    full = os.path.join(UPLOAD_FOLDER, fname)
-
-    with open(full, "wb") as f:
-        f.write(raw)
-
-    return f"uploads/{fname}"
-
-
-@app.route("/visitas/nueva", methods=["POST"])
-def nueva_visita():
+# -------------------------
+# GUARDAR VISITA
+# -------------------------
+@app.route("/visitas/guardar", methods=["POST"])
+def guardar_visita():
     if "user_id" not in session:
-        return redirect(url_for("login"))
+        abort(403)
 
-    cliente = (request.form.get("cliente") or "").strip()
-    comentarios = (request.form.get("comentarios") or "").strip()
-    proxima_visita = (request.form.get("proxima_visita") or "").strip()
-    firma_data = request.form.get("firma_data")  # dataURL
+    fotos = request.files.getlist("fotos")
+    firma_data = request.form.get("firma")
 
-    # Validaciones server-side (NO confiar en JS)
-    if not cliente or not comentarios:
-        return "Faltan campos obligatorios", 400
+    if len(fotos) < 2:
+        flash("Debes subir al menos 2 fotos", "danger")
+        return redirect(url_for("visitas"))
 
-    files = request.files.getlist("fotos")
-    valid_files = [f for f in files if f and f.filename]
-
-    if len(valid_files) < 2:
-        return "Debes subir mínimo 2 fotos", 400
-
-    # Firma obligatoria
     if not firma_data:
-        return "Firma obligatoria", 400
+        flash("La firma es obligatoria", "danger")
+        return redirect(url_for("visitas"))
 
     # Guardar firma
-    try:
-        firma_archivo = _save_base64_signature(firma_data)
-    except Exception:
-        return "Firma inválida", 400
+    firma_b64 = firma_data.split(",")[1]
+    firma_bytes = base64.b64decode(firma_b64)
+    firma_nombre = f"{uuid.uuid4()}.png"
+    firma_path = os.path.join(FIRMAS_FOLDER, firma_nombre)
+
+    with open(firma_path, "wb") as f:
+        f.write(firma_bytes)
 
     conn = get_db()
+    cur = conn.cursor()
 
-    fecha = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    cur = conn.execute("""
-        INSERT INTO actividades (usuario_id, fecha, cliente, comentarios, proxima_visita, firma_archivo)
-        VALUES (?, ?, ?, ?, ?, ?)
+    cur.execute("""
+    INSERT INTO visitas
+    (usuario_id, fecha, cliente, comentarios, proxima_visita, firma)
+    VALUES (?, ?, ?, ?, ?, ?)
     """, (
-        session["user_id"], fecha, cliente, comentarios, proxima_visita, firma_archivo
+        session["user_id"],
+        datetime.now().strftime("%Y-%m-%d %H:%M"),
+        request.form["cliente"],
+        request.form["comentarios"],
+        request.form["proxima_visita"],
+        firma_nombre
     ))
 
-    actividad_id = cur.lastrowid
+    visita_id = cur.lastrowid
 
-    # Guardar fotos
-    for f in valid_files:
-        filename = secure_filename(f.filename)
-        if not _allowed_file(filename):
-            conn.rollback()
-            conn.close()
-            return "Formato de foto no permitido", 400
+    for foto in fotos:
+        nombre = f"{uuid.uuid4()}_{foto.filename}"
+        ruta = os.path.join(UPLOAD_FOLDER, nombre)
+        foto.save(ruta)
 
-        ext = filename.rsplit(".", 1)[-1].lower()
-        new_name = f"actividad_{actividad_id}_{secrets.token_hex(8)}.{ext}"
-        full_path = os.path.join(UPLOAD_FOLDER, new_name)
-        f.save(full_path)
-
-        conn.execute("""
-            INSERT INTO fotos (actividad_id, archivo)
-            VALUES (?, ?)
-        """, (actividad_id, f"uploads/{new_name}"))
+        cur.execute("""
+        INSERT INTO fotos (visita_id, archivo)
+        VALUES (?, ?)
+        """, (visita_id, nombre))
 
     conn.commit()
     conn.close()
 
+    flash("Visita registrada correctamente", "success")
     return redirect(url_for("visitas"))
 
-
 # -------------------------
-# Usuarios (si ya lo tienes en tu proyecto, déjalo como esté)
-# NOTA: No lo toco aquí para no romper nada.
-# -------------------------
-
-
-# -------------------------
-# Cambiar password (tu ruta ya existía, asegúrate que se llame así)
-# -------------------------
-@app.route("/cambiar-password", methods=["GET", "POST"])
-def cambiar_password():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-
-    msg = None
-    error = None
-
-    if request.method == "POST":
-        actual = request.form.get("actual", "")
-        nuevo = request.form.get("nuevo", "")
-        confirmar = request.form.get("confirmar", "")
-
-        if not nuevo or len(nuevo) < 6:
-            error = "El nuevo password debe tener al menos 6 caracteres"
-        elif nuevo != confirmar:
-            error = "El nuevo password no coincide"
-        else:
-            conn = get_db()
-            user = conn.execute(
-                "SELECT * FROM usuarios WHERE id=?",
-                (session["user_id"],)
-            ).fetchone()
-
-            if not user or not check_password_hash(user["password"], actual):
-                error = "Password actual incorrecto"
-            else:
-                conn.execute("""
-                    UPDATE usuarios
-                    SET password=?
-                    WHERE id=?
-                """, (generate_password_hash(nuevo), session["user_id"]))
-                conn.commit()
-                msg = "Password actualizado correctamente"
-
-            conn.close()
-
-    return render_template(
-        "cambiar_password.html",
-        empresa=EMPRESA,
-        logo=LOGO,
-        mensaje=msg,
-        error=error
-    )
-
-
 if __name__ == "__main__":
     app.run(debug=True)
