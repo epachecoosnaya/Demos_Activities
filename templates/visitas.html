@@ -82,7 +82,11 @@
         <tbody>
           {% for a in actividades %}
           <tr>
-            <td>{{ a.fecha }}</td>
+            <td>
+  <a href="{{ url_for('detalle_visita', actividad_id=a.id) }}">
+    {{ a.fecha }}
+  </a>
+</td>
             <td>{{ a.usuario }}</td>
             <td>{{ a.cliente }}</td>
             <td style="max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
