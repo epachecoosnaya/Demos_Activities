@@ -6,57 +6,290 @@
   <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Dashboard</a>
 </div>
 
+<!-- TOASTS (flash) -->
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 2000;">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, msg in messages %}
+      <div class="toast align-items-center text-bg-{{ 'success' if category=='success' else 'danger' }} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+          <div class="toast-body">{{ msg }}</div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+      </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+</div>
+
 <div class="card mb-4">
   <div class="card-body">
-    <h5>Registrar visita</h5>
+    <h5 class="mb-3">Registrar visita</h5>
 
-    <form method="POST" action="{{ url_for('guardar_visita') }}">
-      <div class="mb-2">
-        <label>Cliente *</label>
-        <input type="text" name="cliente" class="form-control" required>
+    <form id="formVisita" method="POST" action="{{ url_for('guardar_visita') }}" enctype="multipart/form-data">
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label">Cliente *</label>
+          <input type="text" name="cliente" id="cliente" class="form-control" required>
+        </div>
+
+        <div class="col-12 col-md-6">
+          <label class="form-label">Próxima visita</label>
+          <input type="date" name="proxima_visita" id="proxima_visita" class="form-control">
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">Comentarios *</label>
+          <textarea name="comentarios" id="comentarios" class="form-control" required></textarea>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">Fotos (2 obligatorias) *</label>
+          <input type="file" name="fotos" id="fotos" class="form-control" accept="image/*" multiple required>
+          <div class="form-text">Selecciona mínimo 2 imágenes (jpg/png/webp).</div>
+        </div>
+
+        <input type="hidden" name="firma_data" id="firma_data">
+
+        <div class="col-12">
+          <!-- NO guarda aquí: solo abre modal -->
+          <button type="button" id="btnRegistrar" class="btn btn-primary">
+            Registrar visita
+          </button>
+        </div>
       </div>
-
-      <div class="mb-2">
-        <label>Comentarios *</label>
-        <textarea name="comentarios" class="form-control" required></textarea>
-      </div>
-
-      <div class="mb-3">
-        <label>Próxima visita</label>
-        <input type="date" name="proxima_visita" class="form-control">
-      </div>
-
-      <button class="btn btn-primary">Registrar visita</button>
     </form>
   </div>
 </div>
 
 <div class="card">
   <div class="card-body">
-    <h5>Historial</h5>
-    <table class="table table-sm">
-      <thead>
-        <tr>
-          <th>Fecha</th>
-          <th>Usuario</th>
-          <th>Cliente</th>
-          <th>Comentarios</th>
-          <th>Próxima visita</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for a in actividades %}
-        <tr>
-          <td>{{ a.fecha }}</td>
-          <td>{{ a.usuario }}</td>
-          <td>{{ a.cliente }}</td>
-          <td>{{ a.comentarios }}</td>
-          <td>{{ a.proxima_visita or "-" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <h5 class="mb-3">Historial</h5>
+
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Usuario</th>
+            <th>Cliente</th>
+            <th>Comentarios</th>
+            <th>Próxima</th>
+            <th>Fotos</th>
+            <th>Firma</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in actividades %}
+          <tr>
+            <td>{{ a.fecha }}</td>
+            <td>{{ a.usuario }}</td>
+            <td>{{ a.cliente }}</td>
+            <td style="max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              {{ a.comentarios }}
+            </td>
+            <td>{{ a.proxima_visita or "-" }}</td>
+            <td>{{ a.fotos_count }}</td>
+            <td>
+              {% if a.firma_archivo %}
+                <span class="badge bg-success">OK</span>
+              {% else %}
+                <span class="badge bg-danger">NO</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
   </div>
 </div>
+
+<!-- MODAL FIRMA -->
+<div class="modal fade" id="firmaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Firma de conformidad</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <p class="mb-2">Firma con el dedo o mouse (obligatoria)</p>
+
+        <div class="border rounded" style="position: relative; width: 100%; height: 320px;">
+          <canvas id="firmaCanvas" style="width:100%; height:100%; display:block;"></canvas>
+        </div>
+
+        <div class="mt-3 d-flex gap-2">
+          <button class="btn btn-outline-secondary" type="button" id="btnLimpiarFirma">Limpiar</button>
+          <div class="ms-auto"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-success" type="button" id="btnConfirmarGuardar">Confirmar y guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Mostrar toasts si existen
+  document.querySelectorAll('.toast').forEach(t => new bootstrap.Toast(t, { delay: 3500 }).show());
+
+  const form = document.getElementById("formVisita");
+  const btnRegistrar = document.getElementById("btnRegistrar");
+  const fotosInput = document.getElementById("fotos");
+  const firmaDataInput = document.getElementById("firma_data");
+
+  const firmaModalEl = document.getElementById("firmaModal");
+  const firmaModal = new bootstrap.Modal(firmaModalEl);
+
+  // Canvas setup (CORRECTO: coordenadas y escala)
+  const canvas = document.getElementById("firmaCanvas");
+  const ctx = canvas.getContext("2d");
+
+  let dibujando = false;
+  let firmaHecha = false;
+
+  function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+
+    canvas.width = Math.floor(rect.width * ratio);
+    canvas.height = Math.floor(rect.height * ratio);
+
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0); // draw in CSS pixels
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#111";
+  }
+
+  function posFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    let clientX, clientY;
+
+    if (e.touches && e.touches.length) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    };
+  }
+
+  function startDraw(e) {
+    e.preventDefault();
+    dibujando = true;
+    const p = posFromEvent(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+  }
+
+  function moveDraw(e) {
+    if (!dibujando) return;
+    e.preventDefault();
+    const p = posFromEvent(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    firmaHecha = true;
+  }
+
+  function endDraw(e) {
+    if (!dibujando) return;
+    e.preventDefault();
+    dibujando = false;
+  }
+
+  // Mouse
+  canvas.addEventListener("mousedown", startDraw);
+  canvas.addEventListener("mousemove", moveDraw);
+  window.addEventListener("mouseup", endDraw);
+
+  // Touch (IMPORTANTE: passive false)
+  canvas.addEventListener("touchstart", startDraw, { passive: false });
+  canvas.addEventListener("touchmove", moveDraw, { passive: false });
+  canvas.addEventListener("touchend", endDraw, { passive: false });
+
+  // Cuando abre modal, recalcular tamaño
+  firmaModalEl.addEventListener("shown.bs.modal", () => {
+    resizeCanvas();
+  });
+
+  // Limpiar
+  document.getElementById("btnLimpiarFirma").addEventListener("click", () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    firmaHecha = false;
+  });
+
+  // Validaciones previas y abrir modal
+  function showToast(msg) {
+    const container = document.createElement("div");
+    container.className = "position-fixed top-0 end-0 p-3";
+    container.style.zIndex = "2000";
+    container.innerHTML = `
+      <div class="toast align-items-center text-bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+          <div class="toast-body">${msg}</div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+      </div>`;
+    document.body.appendChild(container);
+    const toastEl = container.querySelector(".toast");
+    const t = new bootstrap.Toast(toastEl, { delay: 3500 });
+    t.show();
+    toastEl.addEventListener("hidden.bs.toast", () => container.remove());
+  }
+
+  btnRegistrar.addEventListener("click", () => {
+    const cliente = document.getElementById("cliente").value.trim();
+    const comentarios = document.getElementById("comentarios").value.trim();
+    const files = fotosInput.files;
+
+    if (!cliente || !comentarios) {
+      showToast("Cliente y comentarios son obligatorios.");
+      return;
+    }
+
+    if (!files || files.length < 2) {
+      showToast("Debes seleccionar 2 fotos obligatorias.");
+      return;
+    }
+
+    // Reset firma antes de abrir
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    firmaHecha = false;
+    firmaDataInput.value = "";
+
+    firmaModal.show();
+  });
+
+  // Confirmar firma y enviar
+  document.getElementById("btnConfirmarGuardar").addEventListener("click", () => {
+    if (!firmaHecha) {
+      showToast("La firma es obligatoria. Firma antes de guardar.");
+      return;
+    }
+
+    // Guardamos como PNG dataURL (server lo valida)
+    const dataURL = canvas.toDataURL("image/png");
+    firmaDataInput.value = dataURL;
+
+    firmaModal.hide();
+    form.submit();
+  });
+
+  window.addEventListener("resize", () => {
+    // si el modal está abierto, reajusta
+    if (firmaModalEl.classList.contains("show")) resizeCanvas();
+  });
+</script>
 
 {% endblock %}
