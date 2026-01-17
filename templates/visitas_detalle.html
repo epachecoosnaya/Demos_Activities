@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4>Detalle de visita</h4>
+  <a href="{{ url_for('visitas') }}" class="btn btn-secondary">Regresar</a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+
+    <div class="row mb-2">
+      <div class="col-md-3 fw-bold">Fecha:</div>
+      <div class="col-md-9">{{ act.fecha }}</div>
+    </div>
+
+    <div class="row mb-2">
+      <div class="col-md-3 fw-bold">Usuario:</div>
+      <div class="col-md-9">{{ act.usuario }}</div>
+    </div>
+
+    <div class="row mb-2">
+      <div class="col-md-3 fw-bold">Cliente:</div>
+      <div class="col-md-9">{{ act.cliente }}</div>
+    </div>
+
+    <div class="row mb-2">
+      <div class="col-md-3 fw-bold">Comentarios:</div>
+      <div class="col-md-9">{{ act.comentarios }}</div>
+    </div>
+
+    <div class="row mb-2">
+      <div class="col-md-3 fw-bold">Próxima visita:</div>
+      <div class="col-md-9">{{ act.proxima_visita or "-" }}</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- FOTOS -->
+<div class="card mb-3">
+  <div class="card-body">
+    <h5 class="mb-3">Fotos</h5>
+
+    {% if fotos %}
+      <div class="row g-3">
+        {% for f in fotos %}
+        <div class="col-12 col-md-6 col-lg-4">
+          <div class="border rounded p-2 text-center">
+            <img src="{{ url_for('static', filename=f.archivo) }}"
+                 class="img-fluid rounded"
+                 style="max-height: 260px;">
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="text-muted">No hay fotos registradas.</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- FIRMA -->
+<div class="card mb-3">
+  <div class="card-body">
+    <h5 class="mb-3">Firma de conformidad</h5>
+
+    {% if act.firma_archivo %}
+      <div class="border rounded p-3 text-center">
+        <img src="{{ url_for('static', filename=act.firma_archivo) }}"
+             class="img-fluid"
+             style="max-height: 220px;">
+      </div>
+    {% else %}
+      <span class="badge bg-danger">Sin firma</span>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
