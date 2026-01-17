@@ -1,34 +1,32 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h4 class="mb-4">Panel principal</h4>
+<h3 class="mb-4">Dashboard</h3>
 
 <div class="row g-3">
-
-  <div class="col-12 col-md-4">
+  <div class="col-12 col-md-6 col-lg-4">
     <a href="{{ url_for('visitas') }}" class="text-decoration-none">
-      <div class="card card-module shadow-sm text-center">
-        <div>
-          <h5>📋 Visitas</h5>
-          <p class="text-muted mb-0">Registrar y consultar</p>
+      <div class="card card-module">
+        <div class="text-center">
+          <h5>Visitas</h5>
+          <div class="text-muted small">Registrar y consultar</div>
         </div>
       </div>
     </a>
   </div>
 
-  {% if rol == "admin" %}
-  <div class="col-12 col-md-4">
+  {% if rol == 'admin' %}
+  <div class="col-12 col-md-6 col-lg-4">
     <a href="{{ url_for('usuarios') }}" class="text-decoration-none">
-      <div class="card card-module shadow-sm text-center">
-        <div>
-          <h5>👥 Usuarios</h5>
-          <p class="text-muted mb-0">Administración</p>
+      <div class="card card-module">
+        <div class="text-center">
+          <h5>Usuarios</h5>
+          <div class="text-muted small">Crear / editar</div>
         </div>
       </div>
     </a>
   </div>
   {% endif %}
-
 </div>
 
 {% endblock %}
