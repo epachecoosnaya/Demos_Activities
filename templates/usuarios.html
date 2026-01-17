@@ -6,46 +6,122 @@
   <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Dashboard</a>
 </div>
 
+<!-- TOASTS (flash) -->
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 2000;">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, msg in messages %}
+      <div class="toast align-items-center text-bg-{{ 'success' if category=='success' else 'danger' }} border-0 mb-2">
+        <div class="d-flex">
+          <div class="toast-body">{{ msg }}</div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+      </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll('.toast').forEach(t => new bootstrap.Toast(t, { delay: 3500 }).show());
+  });
+</script>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="mb-3">Crear nuevo usuario</h5>
+
+    <form method="POST" action="{{ url_for('crear_usuario') }}">
+      <div class="row g-2">
+        <div class="col-12 col-md-2">
+          <input class="form-control" name="usuario" placeholder="Usuario" required>
+        </div>
+        <div class="col-12 col-md-2">
+          <input class="form-control" name="nombre" placeholder="Nombre">
+        </div>
+        <div class="col-12 col-md-2">
+          <input class="form-control" name="apellido" placeholder="Apellido">
+        </div>
+        <div class="col-12 col-md-3">
+          <input class="form-control" name="email" placeholder="Email" required>
+        </div>
+        <div class="col-12 col-md-2">
+          <input class="form-control" name="password" placeholder="Password" type="password" required>
+        </div>
+        <div class="col-8 col-md-1">
+          <select class="form-select" name="rol">
+            <option value="vendedor">Vendedor</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="col-4 col-md-12 d-grid d-md-none">
+          <button class="btn btn-success">Crear</button>
+        </div>
+        <div class="col-12 d-none d-md-flex justify-content-end">
+          <button class="btn btn-success">Crear</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-body">
-    <table class="table table-sm align-middle">
-      <thead>
-        <tr>
-          <th>Usuario</th>
-          <th>Nombre</th>
-          <th>Apellido</th>
-          <th>Email</th>
-          <th>Rol</th>
-          <th>Activo</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for u in usuarios %}
-        <tr>
-          <form method="POST" action="{{ url_for('actualizar_usuario') }}">
-            <input type="hidden" name="id" value="{{ u.id }}">
-            <td>{{ u.usuario }}</td>
-            <td><input name="nombre" value="{{ u.nombre }}" class="form-control"></td>
-            <td><input name="apellido" value="{{ u.apellido }}" class="form-control"></td>
-            <td><input name="email" value="{{ u.email }}" class="form-control"></td>
-            <td>
-              <select name="rol" class="form-select">
-                <option value="admin" {% if u.rol=='admin' %}selected{% endif %}>Admin</option>
-                <option value="vendedor" {% if u.rol=='vendedor' %}selected{% endif %}>Vendedor</option>
-              </select>
-            </td>
-            <td>
-              <input type="checkbox" name="activo" value="1" {% if u.activo %}checked{% endif %}>
-            </td>
-            <td>
-              <button class="btn btn-sm btn-success">Guardar</button>
-            </td>
-          </form>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <h5 class="mb-3">Listado</h5>
+
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Nombre</th>
+            <th>Apellido</th>
+            <th>Email</th>
+            <th>Rol</th>
+            <th>Activo</th>
+            <th>Nuevo password</th>
+            <th></th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for u in usuarios %}
+          <tr>
+            <form method="POST" action="{{ url_for('actualizar_usuario') }}">
+              <input type="hidden" name="id" value="{{ u.id }}">
+
+              <td><strong>{{ u.usuario }}</strong></td>
+
+              <td><input class="form-control" name="nombre" value="{{ u.nombre or '' }}"></td>
+              <td><input class="form-control" name="apellido" value="{{ u.apellido or '' }}"></td>
+              <td><input class="form-control" name="email" value="{{ u.email or '' }}"></td>
+
+              <td>
+                <select class="form-select" name="rol">
+                  <option value="admin" {% if u.rol=='admin' %}selected{% endif %}>Admin</option>
+                  <option value="vendedor" {% if u.rol=='vendedor' %}selected{% endif %}>Vendedor</option>
+                </select>
+              </td>
+
+              <td class="text-center">
+                <input type="checkbox" name="activo" value="1" {% if u.activo %}checked{% endif %}>
+              </td>
+
+              <td>
+                <input class="form-control" name="new_password" placeholder="(opcional)" type="password">
+              </td>
+
+              <td>
+                <button class="btn btn-sm btn-primary">Guardar</button>
+              </td>
+            </form>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
   </div>
 </div>
 
