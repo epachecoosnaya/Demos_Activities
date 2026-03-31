@@ -20,7 +20,7 @@
       <div class="card-header"><i class="bi bi-info-circle me-1" style="color:#714B67;"></i> Información</div>
       <div class="card-body">
         <table class="table table-borderless" style="font-size:13.5px;margin:0;">
-          <tr><td style="color:#6c757d;width:110px;font-weight:500;">Cliente</td><td><b>{{ act.cliente }}</b></td></tr>
+          <tr><td style="color:#6c757d;width:120px;font-weight:500;">Cliente</td><td><b>{{ act.cliente }}</b></td></tr>
           <tr><td style="color:#6c757d;font-weight:500;">Vendedor</td><td><span class="badge-vendedor">{{ act.usuario }}</span></td></tr>
           <tr><td style="color:#6c757d;font-weight:500;">Fecha</td><td>{{ act.fecha }}</td></tr>
           <tr><td style="color:#6c757d;font-weight:500;">Próx. visita</td><td>{{ act.proxima_visita or '—' }}</td></tr>
@@ -39,7 +39,9 @@
       <div class="card-header"><i class="bi bi-pen-fill me-1" style="color:#714B67;"></i> Firma</div>
       <div class="card-body text-center">
         {% if act.firma_archivo %}
-        <img src="/static/{{ act.firma_archivo }}" class="img-fluid" style="max-height:160px;border-radius:8px;border:1px solid #e2e5e9;">
+        <img src="{{ act.firma_archivo }}" class="img-fluid"
+             style="max-height:160px;border-radius:8px;border:1px solid #e2e5e9;"
+             onerror="this.src='/static/logo.png'">
         <div style="font-size:11.5px;color:#6c757d;margin-top:8px;">
           <i class="bi bi-check-circle-fill text-success me-1"></i> Firma capturada
         </div>
@@ -62,8 +64,11 @@
         <div class="row g-2">
           {% for f in fotos %}
           <div class="col-6">
-            <a href="/static/{{ f.archivo }}" target="_blank">
-              <img src="/static/{{ f.archivo }}" class="img-fluid" style="border-radius:8px;width:100%;aspect-ratio:1;object-fit:cover;border:1px solid #e2e5e9;">
+            <a href="{{ f.archivo }}" target="_blank">
+              <img src="{{ f.archivo }}"
+                   class="img-fluid"
+                   style="border-radius:8px;width:100%;aspect-ratio:1;object-fit:cover;border:1px solid #e2e5e9;"
+                   onerror="this.style.display='none'">
             </a>
           </div>
           {% endfor %}
