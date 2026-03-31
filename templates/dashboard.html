@@ -1,32 +1,154 @@
 {% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block breadcrumb %}Inicio{% endblock %}
+
 {% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <h1>¡Bienvenido, {{ session.get('usuario', '') }}!</h1>
+    <p>{{ now() }} — {{ rol|capitalize }}</p>
+  </div>
+</div>
 
-<h3 class="mb-4">Dashboard</h3>
-
-<div class="row g-3">
-  <div class="col-12 col-md-6 col-lg-4">
-    <a href="{{ url_for('visitas') }}" class="text-decoration-none">
-      <div class="card card-module">
-        <div class="text-center">
-          <h5>Visitas</h5>
-          <div class="text-muted small">Registrar y consultar</div>
-        </div>
+<!-- STATS -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#f0e6f0;">
+        <i class="bi bi-map-fill" style="color:#714B67;"></i>
       </div>
+      <div>
+        <div class="stat-val">{{ stats.total_visitas }}</div>
+        <div class="stat-lbl">Visitas totales</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#e6f4ea;">
+        <i class="bi bi-calendar-check-fill" style="color:#1e7e34;"></i>
+      </div>
+      <div>
+        <div class="stat-val">{{ stats.visitas_hoy }}</div>
+        <div class="stat-lbl">Visitas hoy</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#e8f0fe;">
+        <i class="bi bi-people-fill" style="color:#1a56db;"></i>
+      </div>
+      <div>
+        <div class="stat-val">{{ stats.total_usuarios }}</div>
+        <div class="stat-lbl">Usuarios activos</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#fff3e0;">
+        <i class="bi bi-image-fill" style="color:#e65100;"></i>
+      </div>
+      <div>
+        <div class="stat-val">{{ stats.total_fotos }}</div>
+        <div class="stat-lbl">Fotos subidas</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODULES -->
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div style="font-size:13px;font-weight:600;color:#6c757d;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:14px;">Módulos disponibles</div>
+  </div>
+
+  <div class="col-6 col-md-4 col-lg-3">
+    <a href="{{ url_for('visitas') }}" class="module-card">
+      <div class="module-icon" style="background:#f0e6f0;">
+        <i class="bi bi-map-fill" style="color:#714B67;"></i>
+      </div>
+      <div class="module-title">Visitas</div>
+      <div class="module-desc">Registrar actividades de campo</div>
+      <div class="module-count" style="color:#714B67;">{{ stats.total_visitas }}</div>
     </a>
   </div>
 
   {% if rol == 'admin' %}
-  <div class="col-12 col-md-6 col-lg-4">
-    <a href="{{ url_for('usuarios') }}" class="text-decoration-none">
-      <div class="card card-module">
-        <div class="text-center">
-          <h5>Usuarios</h5>
-          <div class="text-muted small">Crear / editar</div>
-        </div>
+  <div class="col-6 col-md-4 col-lg-3">
+    <a href="{{ url_for('usuarios') }}" class="module-card">
+      <div class="module-icon" style="background:#e8f0fe;">
+        <i class="bi bi-people-fill" style="color:#1a56db;"></i>
       </div>
+      <div class="module-title">Usuarios</div>
+      <div class="module-desc">Gestión de cuentas y roles</div>
+      <div class="module-count" style="color:#1a56db;">{{ stats.total_usuarios }}</div>
     </a>
   </div>
   {% endif %}
+
+  <!-- MÓDULOS FUTUROS -->
+  <div class="col-6 col-md-4 col-lg-3">
+    <div class="module-card" style="opacity:0.5;cursor:not-allowed;">
+      <div class="module-icon" style="background:#f8f9fa;">
+        <i class="bi bi-bar-chart-fill" style="color:#6c757d;"></i>
+      </div>
+      <div class="module-title">Reportes</div>
+      <div class="module-desc">Análisis y estadísticas</div>
+      <div style="margin-top:10px;font-size:11px;background:#e9ecef;border-radius:20px;padding:2px 10px;display:inline-block;color:#6c757d;">Próximamente</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-md-4 col-lg-3">
+    <div class="module-card" style="opacity:0.5;cursor:not-allowed;">
+      <div class="module-icon" style="background:#f8f9fa;">
+        <i class="bi bi-robot" style="color:#6c757d;"></i>
+      </div>
+      <div class="module-title">Asistente IA</div>
+      <div class="module-desc">Claude integrado</div>
+      <div style="margin-top:10px;font-size:11px;background:#e9ecef;border-radius:20px;padding:2px 10px;display:inline-block;color:#6c757d;">Próximamente</div>
+    </div>
+  </div>
 </div>
 
+<!-- RECENT ACTIVITY -->
+{% if visitas_recientes %}
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-clock-history" style="color:#714B67;"></i>
+    Actividad reciente
+    <a href="{{ url_for('visitas') }}" class="btn btn-sm btn-outline-primary ms-auto">Ver todas</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          {% if rol == 'admin' %}<th>Usuario</th>{% endif %}
+          <th>Comentarios</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in visitas_recientes %}
+        <tr>
+          <td>
+            <span style="font-size:13px;color:#495057;">{{ v.fecha[:10] }}</span>
+            <br><span style="font-size:11px;color:#adb5bd;">{{ v.fecha[11:] if v.fecha|length > 10 else '' }}</span>
+          </td>
+          <td><b style="font-size:13.5px;">{{ v.cliente }}</b></td>
+          {% if rol == 'admin' %}
+          <td><span class="badge-vendedor">{{ v.usuario }}</span></td>
+          {% endif %}
+          <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6c757d;font-size:13px;">{{ v.comentarios }}</td>
+          <td><a href="{{ url_for('detalle_visita', actividad_id=v.id) }}" class="btn btn-sm btn-outline-primary">Ver</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

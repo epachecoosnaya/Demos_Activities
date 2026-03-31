@@ -3,48 +3,137 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ empresa }}</title>
-
+  <title>{{ empresa }} — Acceso</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root { --purple: #714B67; --purple-light: #875A7B; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0; min-height: 100vh;
+      background: linear-gradient(135deg, #1e1e2e 0%, #2d1f3d 50%, #1e1e2e 100%);
+      display: flex; align-items: center; justify-content: center;
+      position: relative; overflow: hidden;
+    }
+    body::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 70% 20%, rgba(113,75,103,0.25) 0%, transparent 60%),
+                  radial-gradient(ellipse at 20% 80%, rgba(113,75,103,0.15) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .login-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 40px 38px;
+      width: 100%; max-width: 420px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.3);
+      position: relative; z-index: 1;
+    }
+    .login-logo {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 28px;
+    }
+    .login-logo img { width: 44px; height: 44px; border-radius: 10px; object-fit: contain; }
+    .login-logo-text { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+    .login-logo-sub { font-size: 12px; color: #6c757d; margin-top: 1px; }
+    .login-title { font-size: 15px; font-weight: 500; color: #1a1a2e; margin-bottom: 22px; }
+
+    .form-label { font-size: 13px; font-weight: 500; color: #495057; margin-bottom: 5px; }
+    .form-control {
+      border-radius: 8px; border: 1px solid #dee2e6;
+      font-size: 14px; padding: 10px 14px;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .form-control:focus {
+      border-color: var(--purple-light);
+      box-shadow: 0 0 0 3px rgba(113,75,103,0.12);
+    }
+    .input-icon { position: relative; }
+    .input-icon i { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #adb5bd; font-size: 15px; }
+    .input-icon .form-control { padding-left: 38px; }
+
+    .btn-login {
+      width: 100%; padding: 11px;
+      background: var(--purple); color: #fff; border: none;
+      border-radius: 8px; font-size: 14.5px; font-weight: 600;
+      cursor: pointer; transition: background .15s;
+      margin-top: 6px;
+    }
+    .btn-login:hover { background: var(--purple-light); }
+
+    .alert-danger { border-radius: 8px; font-size: 13.5px; border: 1px solid #f5c2c7; background: #f8d7da; color: #842029; padding: 10px 14px; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+
+    .demo-creds {
+      margin-top: 24px; padding: 14px 16px;
+      background: #f8f9fa; border-radius: 8px;
+      border: 1px solid #e9ecef;
+    }
+    .demo-creds-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #6c757d; margin-bottom: 10px; }
+    .cred-row {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12.5px; cursor: pointer; padding: 5px 0;
+      border-bottom: 1px solid #e9ecef; transition: color .1s;
+    }
+    .cred-row:last-child { border-bottom: none; }
+    .cred-row:hover { color: var(--purple); }
+    .cred-badge { font-size: 11px; background: #fff; border: 1px solid #dee2e6; padding: 2px 8px; border-radius: 5px; color: #495057; font-family: monospace; }
+  </style>
 </head>
-
-<body class="bg-light">
-  <div class="container py-5">
-    <div class="row justify-content-center">
-      <div class="col-12 col-md-5">
-        <div class="card shadow-sm">
-          <div class="card-body p-4">
-            <div class="d-flex align-items-center mb-3">
-              <img src="/static/{{ logo }}" height="40" class="me-2">
-              <h4 class="mb-0">{{ empresa }}</h4>
-            </div>
-
-            {% if error %}
-              <div class="alert alert-danger">{{ error }}</div>
-            {% endif %}
-
-            <form method="POST">
-              <div class="mb-3">
-                <label class="form-label">Usuario</label>
-                <input class="form-control" name="usuario" required>
-              </div>
-
-              <div class="mb-3">
-                <label class="form-label">Password</label>
-                <input class="form-control" name="password" type="password" required>
-              </div>
-
-              <button class="btn btn-primary w-100">Entrar</button>
-            </form>
-
-            <div class="text-muted small mt-3">
-              Admin: <b>admin / admin123</b><br>
-              Demo: <b>demo / 1234</b>
-            </div>
-          </div>
-        </div>
-      </div>
+<body>
+<div class="login-card">
+  <div class="login-logo">
+    <img src="/static/{{ logo }}" alt="logo">
+    <div>
+      <div class="login-logo-text">{{ empresa }}</div>
+      <div class="login-logo-sub">Portal de Actividades</div>
     </div>
   </div>
+
+  <div class="login-title">Inicia sesión en tu cuenta</div>
+
+  {% if error %}
+  <div class="alert-danger"><i class="bi bi-exclamation-circle-fill"></i> {{ error }}</div>
+  {% endif %}
+
+  <form method="POST">
+    <div class="mb-3">
+      <label class="form-label">Usuario</label>
+      <div class="input-icon">
+        <i class="bi bi-person"></i>
+        <input class="form-control" name="usuario" placeholder="Tu nombre de usuario" required autofocus>
+      </div>
+    </div>
+    <div class="mb-4">
+      <label class="form-label">Contraseña</label>
+      <div class="input-icon">
+        <i class="bi bi-lock"></i>
+        <input class="form-control" name="password" type="password" placeholder="••••••••" required>
+      </div>
+    </div>
+    <button type="submit" class="btn-login">Entrar al portal</button>
+  </form>
+
+  <div class="demo-creds">
+    <div class="demo-creds-title">Credenciales de prueba</div>
+    <div class="cred-row" onclick="fillCreds('admin','admin123')">
+      <span><i class="bi bi-shield-check" style="color:#714B67;margin-right:6px;"></i> Administrador</span>
+      <span class="cred-badge">admin / admin123</span>
+    </div>
+    <div class="cred-row" onclick="fillCreds('demo','1234')">
+      <span><i class="bi bi-person" style="color:#1e7e34;margin-right:6px;"></i> Vendedor demo</span>
+      <span class="cred-badge">demo / 1234</span>
+    </div>
+  </div>
+</div>
+
+<script>
+function fillCreds(u,p){
+  document.querySelector('[name=usuario]').value=u;
+  document.querySelector('[name=password]').value=p;
+}
+</script>
 </body>
 </html>

@@ -1,80 +1,81 @@
 {% extends "base.html" %}
+{% block title %}Visita #{{ act.id }}{% endblock %}
+{% block breadcrumb %}Visitas / Detalle #{{ act.id }}{% endblock %}
+
 {% block content %}
-
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h4>Detalle de visita</h4>
-  <a href="{{ url_for('visitas') }}" class="btn btn-secondary">Regresar</a>
-</div>
-
-<div class="card mb-3">
-  <div class="card-body">
-
-    <div class="row mb-2">
-      <div class="col-md-3 fw-bold">Fecha:</div>
-      <div class="col-md-9">{{ act.fecha }}</div>
-    </div>
-
-    <div class="row mb-2">
-      <div class="col-md-3 fw-bold">Usuario:</div>
-      <div class="col-md-9">{{ act.usuario }}</div>
-    </div>
-
-    <div class="row mb-2">
-      <div class="col-md-3 fw-bold">Cliente:</div>
-      <div class="col-md-9">{{ act.cliente }}</div>
-    </div>
-
-    <div class="row mb-2">
-      <div class="col-md-3 fw-bold">Comentarios:</div>
-      <div class="col-md-9">{{ act.comentarios }}</div>
-    </div>
-
-    <div class="row mb-2">
-      <div class="col-md-3 fw-bold">Próxima visita:</div>
-      <div class="col-md-9">{{ act.proxima_visita or "-" }}</div>
-    </div>
-
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <h1>Visita #{{ act.id }}</h1>
+    <p>{{ act.fecha }} · {{ act.usuario }}</p>
   </div>
+  <a href="{{ url_for('visitas') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i> Volver
+  </a>
 </div>
 
-<!-- FOTOS -->
-<div class="card mb-3">
-  <div class="card-body">
-    <h5 class="mb-3">Fotos</h5>
+<div class="row g-3">
+  <!-- DATOS -->
+  <div class="col-md-5">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-info-circle me-1" style="color:#714B67;"></i> Información</div>
+      <div class="card-body">
+        <table class="table table-borderless" style="font-size:13.5px;margin:0;">
+          <tr><td style="color:#6c757d;width:110px;font-weight:500;">Cliente</td><td><b>{{ act.cliente }}</b></td></tr>
+          <tr><td style="color:#6c757d;font-weight:500;">Vendedor</td><td><span class="badge-vendedor">{{ act.usuario }}</span></td></tr>
+          <tr><td style="color:#6c757d;font-weight:500;">Fecha</td><td>{{ act.fecha }}</td></tr>
+          <tr><td style="color:#6c757d;font-weight:500;">Próx. visita</td><td>{{ act.proxima_visita or '—' }}</td></tr>
+          <tr>
+            <td style="color:#6c757d;font-weight:500;">Comentarios</td>
+            <td style="white-space:pre-wrap;">{{ act.comentarios }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
 
-    {% if fotos %}
-      <div class="row g-3">
-        {% for f in fotos %}
-        <div class="col-12 col-md-6 col-lg-4">
-          <div class="border rounded p-2 text-center">
-            <img src="{{ url_for('static', filename=f.archivo) }}"
-                 class="img-fluid rounded"
-                 style="max-height: 260px;">
-          </div>
+  <!-- FIRMA -->
+  <div class="col-md-3">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-pen-fill me-1" style="color:#714B67;"></i> Firma</div>
+      <div class="card-body text-center">
+        {% if act.firma_archivo %}
+        <img src="/static/{{ act.firma_archivo }}" class="img-fluid" style="max-height:160px;border-radius:8px;border:1px solid #e2e5e9;">
+        <div style="font-size:11.5px;color:#6c757d;margin-top:8px;">
+          <i class="bi bi-check-circle-fill text-success me-1"></i> Firma capturada
         </div>
-        {% endfor %}
+        {% else %}
+        <div style="padding:30px 0;color:#adb5bd;">
+          <i class="bi bi-pen" style="font-size:32px;display:block;margin-bottom:8px;"></i>
+          Sin firma
+        </div>
+        {% endif %}
       </div>
-    {% else %}
-      <div class="text-muted">No hay fotos registradas.</div>
-    {% endif %}
+    </div>
+  </div>
+
+  <!-- FOTOS -->
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-images me-1" style="color:#714B67;"></i> Fotos ({{ fotos|length }})</div>
+      <div class="card-body">
+        {% if fotos %}
+        <div class="row g-2">
+          {% for f in fotos %}
+          <div class="col-6">
+            <a href="/static/{{ f.archivo }}" target="_blank">
+              <img src="/static/{{ f.archivo }}" class="img-fluid" style="border-radius:8px;width:100%;aspect-ratio:1;object-fit:cover;border:1px solid #e2e5e9;">
+            </a>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div style="text-align:center;color:#adb5bd;padding:20px 0;">
+          <i class="bi bi-image" style="font-size:32px;display:block;margin-bottom:8px;"></i>
+          Sin fotos
+        </div>
+        {% endif %}
+      </div>
+    </div>
   </div>
 </div>
-
-<!-- FIRMA -->
-<div class="card mb-3">
-  <div class="card-body">
-    <h5 class="mb-3">Firma de conformidad</h5>
-
-    {% if act.firma_archivo %}
-      <div class="border rounded p-3 text-center">
-        <img src="{{ url_for('static', filename=act.firma_archivo) }}"
-             class="img-fluid"
-             style="max-height: 220px;">
-      </div>
-    {% else %}
-      <span class="badge bg-danger">Sin firma</span>
-    {% endif %}
-  </div>
-</div>
-
 {% endblock %}

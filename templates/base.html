@@ -3,53 +3,272 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ empresa }}</title>
-
-  <!-- Bootstrap CSS -->
+  <title>{{ empresa }} — {% block title %}Portal{% endblock %}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <style>
-    body { background-color: #f5f6f8; }
-    .card-module {
-      height: 160px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform .2s;
-      cursor: pointer;
+    :root {
+      --odoo-purple: #714B67;
+      --odoo-purple-light: #875A7B;
+      --odoo-sidebar-bg: #1e1e2e;
+      --odoo-border: #e2e5e9;
+      --odoo-bg: #f5f6f8;
+      --odoo-text: #1a1a2e;
+      --odoo-muted: #6c757d;
+      --sidebar-w: 235px;
     }
-    .card-module:hover { transform: scale(1.03); }
-    .card-module h5 { margin-bottom: 8px; }
-    @media (max-width: 576px) {
-      .card-module { height: 140px; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: var(--odoo-bg); color: var(--odoo-text); margin: 0; }
+
+    /* SIDEBAR */
+    #sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: var(--sidebar-w);
+      background: var(--odoo-sidebar-bg);
+      display: flex; flex-direction: column;
+      z-index: 1000; transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+    }
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 11px;
+      padding: 18px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .sidebar-logo img { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; }
+    .sidebar-company { color: #fff; font-size: 14.5px; font-weight: 600; }
+    .sidebar-subtitle { color: rgba(255,255,255,0.35); font-size: 10.5px; font-weight: 400; margin-top: 1px; }
+
+    .sidebar-nav { flex: 1; overflow-y: auto; padding: 10px 10px; }
+    .sidebar-nav::-webkit-scrollbar { width: 0; }
+    .nav-section { font-size: 10px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: rgba(255,255,255,0.22); padding: 14px 12px 5px; }
+
+    .nav-link-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8.5px 12px;
+      border-radius: 7px;
+      color: rgba(255,255,255,0.6);
+      text-decoration: none;
+      font-size: 13.5px; font-weight: 400;
+      transition: all 0.15s;
+      margin-bottom: 2px;
+    }
+    .nav-link-item i { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
+    .nav-link-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
+    .nav-link-item.active { background: rgba(113,75,103,0.8); color: #fff; font-weight: 500; }
+    .nav-link-item.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+    .nav-badge { margin-left: auto; font-size: 10px; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); padding: 1px 7px; border-radius: 9px; }
+
+    .sidebar-user {
+      padding: 12px 10px; border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .user-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 7px; cursor: pointer; transition: background 0.15s;
+    }
+    .user-row:hover { background: rgba(255,255,255,0.07); }
+    .user-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--odoo-purple); display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600; color: #fff; flex-shrink: 0;
+    }
+    .user-name { color: #fff; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-role { color: rgba(255,255,255,0.35); font-size: 11px; text-transform: capitalize; }
+
+    /* TOPBAR */
+    #topbar {
+      position: fixed; top: 0; left: var(--sidebar-w); right: 0; height: 52px;
+      background: #fff; border-bottom: 1px solid var(--odoo-border);
+      display: flex; align-items: center; padding: 0 22px;
+      z-index: 999; gap: 10px;
+    }
+    .topbar-breadcrumb { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--odoo-muted); }
+    .topbar-breadcrumb .active-crumb { color: var(--odoo-text); font-weight: 500; }
+    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .top-icon-btn {
+      width: 34px; height: 34px; border-radius: 7px; border: 1px solid var(--odoo-border);
+      background: transparent; display: flex; align-items: center; justify-content: center;
+      color: var(--odoo-muted); cursor: pointer; transition: all 0.15s; text-decoration: none; font-size: 15px;
+    }
+    .top-icon-btn:hover { background: var(--odoo-bg); color: var(--odoo-text); }
+    .btn-toggle {
+      display: none; background: none; border: none;
+      color: var(--odoo-muted); font-size: 20px; cursor: pointer; padding: 4px;
+    }
+
+    /* MAIN */
+    #main { margin-left: var(--sidebar-w); padding-top: 52px; min-height: 100vh; }
+    .page-wrap { padding: 26px 28px; }
+
+    /* PAGE HEADER */
+    .page-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; flex-wrap: wrap; gap: 12px; }
+    .page-hdr-left h1 { font-size: 20px; font-weight: 700; margin: 0; }
+    .page-hdr-left p { font-size: 12.5px; color: var(--odoo-muted); margin: 3px 0 0; }
+
+    /* CARDS */
+    .card { border: 1px solid var(--odoo-border); border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .card-header { background: #fff; border-bottom: 1px solid var(--odoo-border); border-radius: 10px 10px 0 0 !important; padding: 13px 18px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+    .card-body { background: #fff; border-radius: 0 0 10px 10px; }
+
+    /* MODULE CARD */
+    .module-card {
+      background: #fff; border: 1px solid var(--odoo-border); border-radius: 12px;
+      padding: 28px 20px; text-align: center; cursor: pointer;
+      transition: all 0.2s; text-decoration: none; color: var(--odoo-text); display: block;
+    }
+    .module-card:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(0,0,0,0.09); border-color: var(--odoo-purple-light); color: var(--odoo-text); }
+    .module-icon { width: 58px; height: 58px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; font-size: 26px; }
+    .module-title { font-weight: 600; font-size: 15px; margin-bottom: 5px; }
+    .module-desc { font-size: 12px; color: var(--odoo-muted); }
+    .module-count { font-size: 24px; font-weight: 700; margin-top: 8px; }
+
+    /* STAT CARD */
+    .stat-card {
+      background: #fff; border: 1px solid var(--odoo-border); border-radius: 10px;
+      padding: 18px 20px; display: flex; align-items: center; gap: 14px;
+    }
+    .stat-icon { width: 46px; height: 46px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    .stat-val { font-size: 24px; font-weight: 700; line-height: 1.1; }
+    .stat-lbl { font-size: 12px; color: var(--odoo-muted); margin-top: 2px; }
+
+    /* TABLE */
+    .table { font-size: 13.5px; margin: 0; }
+    .table thead th { background: #f8f9fb; color: var(--odoo-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--odoo-border); padding: 10px 16px; }
+    .table tbody td { padding: 12px 16px; vertical-align: middle; border-bottom: 1px solid #f0f1f3; }
+    .table tbody tr:last-child td { border-bottom: none; }
+    .table tbody tr:hover { background: #f9fafb; }
+
+    /* BUTTONS */
+    .btn-primary { background: var(--odoo-purple); border-color: var(--odoo-purple); font-size: 13.5px; font-weight: 500; border-radius: 7px; padding: 8px 18px; }
+    .btn-primary:hover { background: var(--odoo-purple-light); border-color: var(--odoo-purple-light); }
+    .btn-outline-primary { color: var(--odoo-purple); border-color: var(--odoo-purple); font-size: 13.5px; font-weight: 500; border-radius: 7px; padding: 8px 18px; }
+    .btn-outline-primary:hover { background: var(--odoo-purple); border-color: var(--odoo-purple); }
+    .btn-sm { padding: 5px 12px !important; font-size: 12.5px !important; }
+
+    /* BADGES */
+    .badge-admin { background: #e8f0fe; color: #1a56db; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+    .badge-vendedor { background: #e6f4ea; color: #1e7e34; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+    .badge-activo { background: #e6f4ea; color: #1e7e34; border-radius: 20px; padding: 3px 10px; font-size: 11px; }
+    .badge-inactivo { background: #fce8e6; color: #c5221f; border-radius: 20px; padding: 3px 10px; font-size: 11px; }
+
+    /* FORM */
+    .form-label { font-size: 13px; font-weight: 500; color: #495057; margin-bottom: 5px; }
+    .form-control, .form-select { border-radius: 7px; border: 1px solid #ced4da; font-size: 13.5px; padding: 8px 12px; }
+    .form-control:focus, .form-select:focus { border-color: var(--odoo-purple-light); box-shadow: 0 0 0 3px rgba(113,75,103,0.12); }
+
+    /* FLASH */
+    .flash-wrap { position: fixed; top: 62px; right: 18px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; max-width: 360px; }
+    .flash-item { padding: 12px 16px; border-radius: 8px; font-size: 13.5px; display: flex; align-items: center; gap: 9px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); animation: fIn 0.3s ease; background: #fff; }
+    .flash-item.success { border-left: 4px solid #1e7e34; color: #1e7e34; }
+    .flash-item.danger  { border-left: 4px solid #c5221f; color: #c5221f; }
+    @keyframes fIn { from { opacity:0; transform: translateX(16px); } to { opacity:1; transform: translateX(0); } }
+
+    /* MODAL */
+    .modal-content { border-radius: 12px; border: 1px solid var(--odoo-border); }
+    .modal-header { border-bottom: 1px solid var(--odoo-border); padding: 16px 20px; }
+    .modal-title { font-size: 15px; font-weight: 600; }
+    .modal-footer { border-top: 1px solid var(--odoo-border); }
+
+    /* OVERLAY */
+    #sb-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.38); z-index: 999; }
+
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+      #sidebar { transform: translateX(-100%); }
+      #sidebar.open { transform: translateX(0); }
+      #topbar { left: 0; }
+      #main { margin-left: 0; }
+      .btn-toggle { display: flex !important; align-items: center; }
+      #sb-overlay.open { display: block; }
+      .page-wrap { padding: 16px; }
     }
   </style>
+  {% block extra_head %}{% endblock %}
 </head>
-
 <body>
 
-<nav class="navbar navbar-dark bg-dark px-3">
-  <span class="navbar-brand d-flex align-items-center">
-    <img src="/static/{{ logo }}" height="32" class="me-2">
-    <span class="d-none d-sm-inline">{{ empresa }}</span>
-  </span>
-
-  <div class="d-flex align-items-center">
-    <span class="text-white small me-2">
-      {{ session.usuario }}
-    </span>
-    <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">
-      Salir
-    </a>
+<div id="sidebar">
+  <div class="sidebar-logo">
+    <img src="/static/{{ logo }}" alt="logo">
+    <div>
+      <div class="sidebar-company">{{ empresa }}</div>
+      <div class="sidebar-subtitle">Portal de Actividades</div>
+    </div>
   </div>
-</nav>
 
-<div class="container my-4">
-  {% block content %}{% endblock %}
+  <nav class="sidebar-nav">
+    <div class="nav-section">Principal</div>
+    <a href="{{ url_for('dashboard') }}" class="nav-link-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+      <i class="bi bi-grid-fill"></i> Inicio
+    </a>
+
+    <div class="nav-section">Módulos</div>
+    <a href="{{ url_for('visitas') }}" class="nav-link-item {% if 'visita' in request.endpoint %}active{% endif %}">
+      <i class="bi bi-map-fill"></i> Visitas
+    </a>
+    {% if session.get('rol') == 'admin' %}
+    <a href="{{ url_for('usuarios') }}" class="nav-link-item {% if request.endpoint == 'usuarios' %}active{% endif %}">
+      <i class="bi bi-people-fill"></i> Usuarios
+    </a>
+    {% endif %}
+
+    <div class="nav-section">En desarrollo</div>
+    <a class="nav-link-item disabled"><i class="bi bi-bar-chart-fill"></i> Reportes <span class="nav-badge">Pronto</span></a>
+    <a class="nav-link-item disabled"><i class="bi bi-gear-fill"></i> Configuración <span class="nav-badge">Pronto</span></a>
+    <a class="nav-link-item disabled"><i class="bi bi-robot"></i> Asistente IA <span class="nav-badge">Pronto</span></a>
+  </nav>
+
+  <div class="sidebar-user">
+    <div class="user-row" onclick="window.location='{{ url_for('logout') }}'">
+      <div class="user-avatar">{{ session.get('usuario', 'U')[0]|upper }}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="user-name">{{ session.get('usuario', '') }}</div>
+        <div class="user-role">{{ session.get('rol', '') }}</div>
+      </div>
+      <i class="bi bi-box-arrow-right" style="color:rgba(255,255,255,0.3);font-size:14px;"></i>
+    </div>
+  </div>
 </div>
 
-<!-- Bootstrap JS (NECESARIO PARA MODALS/TOASTS) -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<div id="sb-overlay" onclick="closeSB()"></div>
 
+<div id="topbar">
+  <button class="btn-toggle" onclick="toggleSB()"><i class="bi bi-list"></i></button>
+  <div class="topbar-breadcrumb">
+    <span>{{ empresa }}</span>
+    <i class="bi bi-chevron-right" style="font-size:11px;"></i>
+    <span class="active-crumb">{% block breadcrumb %}Inicio{% endblock %}</span>
+  </div>
+  <div class="topbar-right">
+    <a href="{{ url_for('dashboard') }}" class="top-icon-btn" title="Inicio"><i class="bi bi-house"></i></a>
+    <a href="{{ url_for('logout') }}" class="top-icon-btn" title="Salir"><i class="bi bi-box-arrow-right"></i></a>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="flash-wrap" id="flash-wrap">
+  {% for cat, msg in messages %}
+  <div class="flash-item {{ cat }}">
+    <i class="bi bi-{% if cat == 'success' %}check-circle-fill{% else %}x-circle-fill{% endif %}"></i>
+    {{ msg }}
+  </div>
+  {% endfor %}
+</div>
+<script>setTimeout(()=>{const f=document.getElementById('flash-wrap');if(f){f.style.transition='opacity .5s';f.style.opacity='0';setTimeout(()=>f.remove(),500);}},3200);</script>
+{% endif %}
+{% endwith %}
+
+<div id="main">
+  <div class="page-wrap">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function toggleSB(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sb-overlay').classList.toggle('open');}
+function closeSB(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sb-overlay').classList.remove('open');}
+</script>
+{% block extra_js %}{% endblock %}
 </body>
 </html>

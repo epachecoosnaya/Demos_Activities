@@ -1,128 +1,189 @@
 {% extends "base.html" %}
+{% block title %}Usuarios{% endblock %}
+{% block breadcrumb %}Usuarios{% endblock %}
+
 {% block content %}
-
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h3>Usuarios</h3>
-  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Dashboard</a>
-</div>
-
-<!-- TOASTS (flash) -->
-<div class="position-fixed top-0 end-0 p-3" style="z-index: 2000;">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, msg in messages %}
-      <div class="toast align-items-center text-bg-{{ 'success' if category=='success' else 'danger' }} border-0 mb-2">
-        <div class="d-flex">
-          <div class="toast-body">{{ msg }}</div>
-          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-        </div>
-      </div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
-</div>
-
-<script>
-  document.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll('.toast').forEach(t => new bootstrap.Toast(t, { delay: 3500 }).show());
-  });
-</script>
-
-<div class="card mb-4">
-  <div class="card-body">
-    <h5 class="mb-3">Crear nuevo usuario</h5>
-
-    <form method="POST" action="{{ url_for('crear_usuario') }}">
-      <div class="row g-2">
-        <div class="col-12 col-md-2">
-          <input class="form-control" name="usuario" placeholder="Usuario" required>
-        </div>
-        <div class="col-12 col-md-2">
-          <input class="form-control" name="nombre" placeholder="Nombre">
-        </div>
-        <div class="col-12 col-md-2">
-          <input class="form-control" name="apellido" placeholder="Apellido">
-        </div>
-        <div class="col-12 col-md-3">
-          <input class="form-control" name="email" placeholder="Email" required>
-        </div>
-        <div class="col-12 col-md-2">
-          <input class="form-control" name="password" placeholder="Password" type="password" required>
-        </div>
-        <div class="col-8 col-md-1">
-          <select class="form-select" name="rol">
-            <option value="vendedor">Vendedor</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
-        <div class="col-4 col-md-12 d-grid d-md-none">
-          <button class="btn btn-success">Crear</button>
-        </div>
-        <div class="col-12 d-none d-md-flex justify-content-end">
-          <button class="btn btn-success">Crear</button>
-        </div>
-      </div>
-    </form>
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <h1>Usuarios</h1>
+    <p>{{ usuarios|length }} usuarios en el sistema</p>
   </div>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrear">
+    <i class="bi bi-person-plus me-1"></i> Nuevo usuario
+  </button>
 </div>
 
 <div class="card">
-  <div class="card-body">
-    <h5 class="mb-3">Listado</h5>
-
-    <div class="table-responsive">
-      <table class="table table-sm align-middle">
-        <thead>
-          <tr>
-            <th>Usuario</th>
-            <th>Nombre</th>
-            <th>Apellido</th>
-            <th>Email</th>
-            <th>Rol</th>
-            <th>Activo</th>
-            <th>Nuevo password</th>
-            <th></th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {% for u in usuarios %}
-          <tr>
-            <form method="POST" action="{{ url_for('actualizar_usuario') }}">
-              <input type="hidden" name="id" value="{{ u.id }}">
-
-              <td><strong>{{ u.usuario }}</strong></td>
-
-              <td><input class="form-control" name="nombre" value="{{ u.nombre or '' }}"></td>
-              <td><input class="form-control" name="apellido" value="{{ u.apellido or '' }}"></td>
-              <td><input class="form-control" name="email" value="{{ u.email or '' }}"></td>
-
-              <td>
-                <select class="form-select" name="rol">
-                  <option value="admin" {% if u.rol=='admin' %}selected{% endif %}>Admin</option>
-                  <option value="vendedor" {% if u.rol=='vendedor' %}selected{% endif %}>Vendedor</option>
-                </select>
-              </td>
-
-              <td class="text-center">
-                <input type="checkbox" name="activo" value="1" {% if u.activo %}checked{% endif %}>
-              </td>
-
-              <td>
-                <input class="form-control" name="new_password" placeholder="(opcional)" type="password">
-              </td>
-
-              <td>
-                <button class="btn btn-sm btn-primary">Guardar</button>
-              </td>
-            </form>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-
+  <div class="card-header"><i class="bi bi-people-fill me-1" style="color:#714B67;"></i> Lista de usuarios</div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Usuario</th>
+          <th>Nombre</th>
+          <th>Email</th>
+          <th>Rol</th>
+          <th>Estado</th>
+          <th>Creado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td style="color:#adb5bd;font-size:12px;">{{ u.id }}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:9px;">
+              <div style="width:30px;height:30px;border-radius:50%;background:#714B67;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;flex-shrink:0;">
+                {{ u.usuario[0]|upper }}
+              </div>
+              <b style="font-size:13.5px;">{{ u.usuario }}</b>
+            </div>
+          </td>
+          <td style="font-size:13.5px;">{{ u.nombre }} {{ u.apellido }}</td>
+          <td style="font-size:13px;color:#6c757d;">{{ u.email }}</td>
+          <td>
+            {% if u.rol == 'admin' %}
+            <span class="badge-admin">Administrador</span>
+            {% else %}
+            <span class="badge-vendedor">Vendedor</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if u.activo %}
+            <span class="badge-activo"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>Activo</span>
+            {% else %}
+            <span class="badge-inactivo"><i class="bi bi-circle me-1" style="font-size:7px;vertical-align:middle;"></i>Inactivo</span>
+            {% endif %}
+          </td>
+          <td style="font-size:12px;color:#adb5bd;">{{ u.fecha_creacion[:10] if u.fecha_creacion else '—' }}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary"
+              onclick="abrirEditar({{ u.id }}, '{{ u.nombre }}', '{{ u.apellido }}', '{{ u.email }}', '{{ u.rol }}', {{ u.activo }})">
+              <i class="bi bi-pencil"></i>
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 
+<!-- MODAL CREAR -->
+<div class="modal fade" id="modalCrear" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2" style="color:#714B67;"></i>Nuevo usuario</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('crear_usuario') }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Usuario <span class="text-danger">*</span></label>
+              <input class="form-control" name="usuario" placeholder="nombre_usuario" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Nombre</label>
+              <input class="form-control" name="nombre" placeholder="Nombre">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Apellido</label>
+              <input class="form-control" name="apellido" placeholder="Apellido">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Email <span class="text-danger">*</span></label>
+              <input class="form-control" name="email" type="email" placeholder="correo@empresa.com" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Contraseña <span class="text-danger">*</span></label>
+              <input class="form-control" name="password" type="password" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Rol</label>
+              <select class="form-select" name="rol">
+                <option value="vendedor">Vendedor</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i> Crear usuario</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR -->
+<div class="modal fade" id="modalEditar" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2" style="color:#714B67;"></i>Editar usuario</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('actualizar_usuario') }}">
+        <input type="hidden" name="id" id="edit-id">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Nombre</label>
+              <input class="form-control" name="nombre" id="edit-nombre">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Apellido</label>
+              <input class="form-control" name="apellido" id="edit-apellido">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Email</label>
+              <input class="form-control" name="email" id="edit-email" type="email">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Rol</label>
+              <select class="form-select" name="rol" id="edit-rol">
+                <option value="vendedor">Vendedor</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Estado</label>
+              <select class="form-select" name="activo" id="edit-activo">
+                <option value="1">Activo</option>
+                <option value="0">Inactivo</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Nueva contraseña <span style="color:#adb5bd;font-weight:400;">(dejar vacío para no cambiar)</span></label>
+              <input class="form-control" name="new_password" type="password" placeholder="Nueva contraseña">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i> Guardar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function abrirEditar(id, nombre, apellido, email, rol, activo) {
+  document.getElementById('edit-id').value = id;
+  document.getElementById('edit-nombre').value = nombre;
+  document.getElementById('edit-apellido').value = apellido;
+  document.getElementById('edit-email').value = email;
+  document.getElementById('edit-rol').value = rol;
+  document.getElementById('edit-activo').value = activo;
+  new bootstrap.Modal(document.getElementById('modalEditar')).show();
+}
+</script>
 {% endblock %}
