@@ -46,6 +46,10 @@
           <td>
             {% if u.rol == 'admin' %}
             <span class="badge-admin">Administrador</span>
+            {% elif u.rol == 'gerente' %}
+            <span style="background:#fff3e0;color:#e65100;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;">Gerente</span>
+            {% elif u.rol == 'supervisor' %}
+            <span style="background:#f3e5f5;color:#7b1fa2;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;">Supervisor</span>
             {% else %}
             <span class="badge-vendedor">Vendedor</span>
             {% endif %}
@@ -73,7 +77,7 @@
 
 <!-- MODAL CREAR -->
 <div class="modal fade" id="modalCrear" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="bi bi-person-plus me-2" style="color:#714B67;"></i>Nuevo usuario</h5>
@@ -106,8 +110,18 @@
               <label class="form-label">Rol</label>
               <select class="form-select" name="rol">
                 <option value="vendedor">Vendedor</option>
+                <option value="supervisor">Supervisor</option>
+                <option value="gerente">Gerente</option>
                 <option value="admin">Administrador</option>
               </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Teléfono</label>
+              <input class="form-control" name="telefono" placeholder="+52 555 000 0000">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Zona / Territorio</label>
+              <input class="form-control" name="zona" placeholder="Ej: Norte, CDMX, Guadalajara...">
             </div>
           </div>
         </div>
@@ -122,7 +136,7 @@
 
 <!-- MODAL EDITAR -->
 <div class="modal fade" id="modalEditar" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="bi bi-pencil me-2" style="color:#714B67;"></i>Editar usuario</h5>
@@ -148,6 +162,8 @@
               <label class="form-label">Rol</label>
               <select class="form-select" name="rol" id="edit-rol">
                 <option value="vendedor">Vendedor</option>
+                <option value="supervisor">Supervisor</option>
+                <option value="gerente">Gerente</option>
                 <option value="admin">Administrador</option>
               </select>
             </div>

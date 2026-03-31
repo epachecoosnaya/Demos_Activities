@@ -13,7 +13,36 @@
   </button>
 </div>
 
-<!-- LISTA -->
+<!-- ═══ RECORDATORIOS ═══ -->
+{% set visitas_pendientes = actividades | selectattr('proxima_visita') | list %}
+{% if visitas_pendientes %}
+<div class="card mb-3" style="border-left:4px solid #714B67;">
+  <div class="card-header" style="cursor:pointer;" onclick="toggleRec(this)">
+    <i class="bi bi-bell-fill me-2" style="color:#714B67;"></i>
+    Recordatorios
+    <span class="ms-1" style="font-size:12px;font-weight:400;color:#6c757d;">· {{ visitas_pendientes|length }} con próxima visita agendada</span>
+    <i class="bi bi-chevron-down" style="float:right;font-size:12px;color:#adb5bd;line-height:1.6;" id="rec-chev"></i>
+  </div>
+  <div class="card-body" id="rec-body" style="padding:14px 18px;">
+    <div class="row g-2">
+      {% for a in visitas_pendientes[:6] %}
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="rec-card" data-fecha="{{ a.proxima_visita }}">
+          <div class="rec-icon-wrap"><i class="bi bi-calendar2-event"></i></div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ a.cliente }}</div>
+            <div class="rec-lbl" style="font-size:11.5px;margin-top:2px;">{{ a.proxima_visita }}</div>
+          </div>
+          <a href="{{ url_for('detalle_visita', actividad_id=a.id) }}" class="btn btn-sm" style="font-size:11px;padding:3px 10px;border:1px solid #dee2e6;border-radius:6px;color:#6c757d;white-space:nowrap;">Ver</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ═══ TABLA ═══ -->
 <div class="card">
   <div class="card-header">
     <i class="bi bi-list-ul" style="color:#714B67;"></i>
@@ -28,7 +57,7 @@
         <tr>
           <th>#</th>
           <th>Fecha</th>
-          {% if session.get('rol') == 'admin' %}<th>Vendedor</th>{% endif %}
+          {% if session.get('rol') in ['admin','gerente','supervisor'] %}<th>Vendedor</th>{% endif %}
           <th>Cliente</th>
           <th>Comentarios</th>
           <th>Próx. visita</th>
@@ -45,14 +74,14 @@
             <span style="font-size:13px;">{{ a.fecha[:10] }}</span><br>
             <span style="font-size:11px;color:#adb5bd;">{{ a.fecha[11:] if a.fecha|length > 10 else '' }}</span>
           </td>
-          {% if session.get('rol') == 'admin' %}
+          {% if session.get('rol') in ['admin','gerente','supervisor'] %}
           <td><span class="badge-vendedor">{{ a.usuario }}</span></td>
           {% endif %}
           <td><b>{{ a.cliente }}</b></td>
           <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6c757d;font-size:13px;" title="{{ a.comentarios }}">{{ a.comentarios }}</td>
           <td>
             {% if a.proxima_visita %}
-            <span style="font-size:12.5px;color:#714B67;"><i class="bi bi-calendar2-event me-1"></i>{{ a.proxima_visita }}</span>
+            <span class="fecha-prox" data-fecha="{{ a.proxima_visita }}" style="font-size:12.5px;"></span>
             {% else %}
             <span style="color:#adb5bd;font-size:12px;">—</span>
             {% endif %}
@@ -90,7 +119,10 @@
   {% endif %}
 </div>
 
-<!-- MODAL NUEVA VISITA -->
+<!-- ═══ MODAL NUEVA VISITA ═══
+     FIX: form solo en modal-body. Botón submit usa form="form-visita".
+     Así modal-footer siempre es visible y el body hace scroll.
+-->
 <div class="modal fade" id="modalNueva" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -98,8 +130,9 @@
         <h5 class="modal-title"><i class="bi bi-map-fill me-2" style="color:#714B67;"></i>Nueva visita</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <form method="POST" action="{{ url_for('guardar_visita') }}" enctype="multipart/form-data" id="form-visita">
-        <div class="modal-body">
+
+      <div class="modal-body">
+        <form id="form-visita" method="POST" action="{{ url_for('guardar_visita') }}" enctype="multipart/form-data">
           <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label">Cliente <span class="text-danger">*</span></label>
@@ -117,44 +150,51 @@
             <!-- FOTOS -->
             <div class="col-12">
               <label class="form-label">Fotos <span class="text-danger">* (mín. 2)</span></label>
-              <div class="foto-dropzone" id="foto-dropzone" onclick="document.getElementById('input-fotos').click()">
+              <div class="foto-dropzone" onclick="document.getElementById('input-fotos').click()">
                 <i class="bi bi-cloud-upload" style="font-size:28px;color:#adb5bd;display:block;margin-bottom:8px;"></i>
                 <div style="font-size:13.5px;color:#6c757d;">Haz clic o arrastra fotos aquí</div>
                 <div style="font-size:12px;color:#adb5bd;margin-top:4px;">PNG, JPG, WEBP</div>
               </div>
               <input type="file" id="input-fotos" name="fotos" multiple accept=".png,.jpg,.jpeg,.webp" style="display:none;" onchange="previewFotos(this)">
               <div id="fotos-preview" class="row g-2 mt-2"></div>
-              <div id="fotos-error" style="color:#c5221f;font-size:12.5px;margin-top:6px;display:none;">
-                <i class="bi bi-exclamation-circle me-1"></i> Debes seleccionar al menos 2 fotos.
+              <div id="fotos-error" class="mt-1" style="color:#c5221f;font-size:12.5px;display:none;">
+                <i class="bi bi-exclamation-circle me-1"></i>Debes seleccionar al menos 2 fotos.
               </div>
             </div>
 
             <!-- FIRMA -->
             <div class="col-12">
               <label class="form-label">Firma digital <span class="text-danger">*</span></label>
-              <div style="border:1.5px solid #dee2e6;border-radius:8px;overflow:hidden;background:#fff;">
-                <canvas id="firma-canvas" style="display:block;width:100%;height:160px;touch-action:none;cursor:crosshair;"></canvas>
+              <div style="border:1.5px solid #dee2e6;border-radius:8px;overflow:hidden;">
+                <canvas id="firma-canvas" style="display:block;width:100%;height:160px;touch-action:none;cursor:crosshair;background:#fff;"></canvas>
               </div>
-              <div style="display:flex;gap:8px;margin-top:8px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearFirma()">
-                  <i class="bi bi-eraser me-1"></i> Borrar firma
+                  <i class="bi bi-eraser me-1"></i>Borrar firma
                 </button>
-                <span id="firma-ok" style="display:none;color:#1e7e34;font-size:13px;align-self:center;">
-                  <i class="bi bi-check-circle-fill me-1"></i> Firma capturada
+                <span id="firma-ok" style="display:none;color:#1e7e34;font-size:13px;align-items:center;gap:4px;">
+                  <i class="bi bi-check-circle-fill"></i> Firma capturada
+                </span>
+                <span id="firma-err" style="display:none;color:#c5221f;font-size:12.5px;">
+                  <i class="bi bi-exclamation-circle me-1"></i>La firma es obligatoria.
                 </span>
               </div>
               <input type="hidden" id="firma_data" name="firma_data">
             </div>
           </div>
-        </div>
+        </form><!-- /form termina aquí -->
+      </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-primary" id="btn-guardar">
-            <i class="bi bi-check-lg me-1"></i> Guardar visita
-          </button>
-        </div>
-      </form>
+      <!-- Footer SIEMPRE visible -->
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <span style="font-size:11.5px;color:#adb5bd;flex:1;">
+          <i class="bi bi-info-circle me-1"></i> Campos <span class="text-danger">*</span> obligatorios
+        </span>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" form="form-visita" class="btn btn-primary" onclick="return validarVisita()">
+          <i class="bi bi-check-lg me-1"></i> Guardar visita
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -162,93 +202,153 @@
 
 {% block extra_head %}
 <style>
-  .foto-dropzone {
-    border: 2px dashed #dee2e6; border-radius: 8px; padding: 24px;
-    text-align: center; cursor: pointer; transition: all .15s;
-  }
-  .foto-dropzone:hover { border-color: #714B67; background: #faf8f9; }
-  .foto-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid #dee2e6; }
+  .foto-dropzone { border:2px dashed #dee2e6;border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .15s; }
+  .foto-dropzone:hover { border-color:#714B67;background:#fdf8fc; }
+  .foto-thumb { width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid #dee2e6; }
+
+  .rec-card { display:flex;align-items:center;gap:10px;background:#f8f9fb;border:1px solid #e2e5e9;border-radius:8px;padding:10px 12px; }
+  .rec-card.vencida { background:#fff5f5;border-color:#f5c2c7; }
+  .rec-card.hoy { background:#fff8e6;border-color:#ffe082; }
+  .rec-card.proxima { background:#f0faf4;border-color:#b2dfdb; }
+  .rec-icon-wrap { width:32px;height:32px;border-radius:8px;background:#fff;border:1px solid #dee2e6;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;color:#714B67; }
+  .rec-card.vencida .rec-icon-wrap { color:#c5221f;border-color:#f5c2c7; }
+  .rec-card.hoy .rec-icon-wrap { color:#e65100;border-color:#ffe082; }
+  .rec-card.proxima .rec-icon-wrap { color:#1e7e34;border-color:#b2dfdb; }
+  .rec-card.vencida .rec-lbl { color:#c5221f;font-weight:600; }
+  .rec-card.hoy .rec-lbl { color:#e65100;font-weight:600; }
+  .rec-card.proxima .rec-lbl { color:#1e7e34; }
+
+  .fecha-prox.vencida { color:#c5221f!important;font-weight:600; }
+  .fecha-prox.hoy { color:#e65100!important;font-weight:600; }
+  .fecha-prox.semana { color:#1e7e34!important; }
 </style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// ---- FOTO PREVIEW ----
-function previewFotos(input) {
-  const preview = document.getElementById('fotos-preview');
-  preview.innerHTML = '';
-  const files = Array.from(input.files);
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const col = document.createElement('div');
-      col.className = 'col-4 col-md-2';
-      col.innerHTML = `<img src="${e.target.result}" class="foto-thumb">`;
-      preview.appendChild(col);
-    };
-    reader.readAsDataURL(file);
-  });
-  document.getElementById('fotos-error').style.display = files.length < 2 ? 'block' : 'none';
+// ── CLASIFICAR FECHAS ──
+const HOY = new Date(); HOY.setHours(0,0,0,0);
+const EN7 = new Date(HOY); EN7.setDate(HOY.getDate()+7);
+
+function classFecha(s) {
+  if (!s) return '';
+  const d = new Date(s + 'T00:00:00');
+  if (d < HOY) return 'vencida';
+  if (d.toDateString() === HOY.toDateString()) return 'hoy';
+  if (d <= EN7) return 'semana';
+  return 'proxima';
+}
+function labelFecha(cls, s) {
+  if (cls==='vencida') return `<i class="bi bi-exclamation-circle-fill me-1"></i>Vencida · ${s}`;
+  if (cls==='hoy')     return `<i class="bi bi-clock-fill me-1"></i>HOY`;
+  if (cls==='semana')  return `<i class="bi bi-calendar2-event me-1"></i>Esta sem. · ${s}`;
+  return `<i class="bi bi-calendar2-event me-1"></i>${s}`;
 }
 
-// ---- FIRMA ----
+// Tabla
+document.querySelectorAll('.fecha-prox').forEach(el => {
+  const cls = classFecha(el.dataset.fecha);
+  el.classList.add(cls);
+  el.innerHTML = labelFecha(cls, el.dataset.fecha);
+});
+// Recordatorios
+document.querySelectorAll('.rec-card').forEach(el => {
+  const cls = classFecha(el.dataset.fecha);
+  el.classList.add(cls);
+  const lbl = el.querySelector('.rec-lbl');
+  if (cls==='vencida') lbl.textContent = '⚠ VENCIDA · '+el.dataset.fecha;
+  else if (cls==='hoy') lbl.textContent = '🔔 HOY';
+  else if (cls==='semana') lbl.textContent = '📅 Esta semana · '+el.dataset.fecha;
+});
+
+// Toggle recordatorios
+function toggleRec(header) {
+  const body = document.getElementById('rec-body');
+  const chev = document.getElementById('rec-chev');
+  const visible = body.style.display !== 'none';
+  body.style.display = visible ? 'none' : '';
+  chev.className = visible ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
+  chev.style.cssText = 'float:right;font-size:12px;color:#adb5bd;line-height:1.6;';
+}
+
+// ── FIRMA ──
 const canvas = document.getElementById('firma-canvas');
 const ctx = canvas.getContext('2d');
 let drawing = false, firmaHecha = false;
 
 function resizeCanvas() {
-  const rect = canvas.parentElement.getBoundingClientRect();
-  canvas.width = rect.width; canvas.height = 160;
-  ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 2.5;
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const w = canvas.parentElement.clientWidth || 560;
+  canvas.width = w; canvas.height = 160;
+  ctx.strokeStyle='#1a1a2e'; ctx.lineWidth=2.5; ctx.lineCap='round'; ctx.lineJoin='round';
 }
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
+document.getElementById('modalNueva').addEventListener('shown.bs.modal', resizeCanvas);
 
-function getPos(e) {
-  const r = canvas.getBoundingClientRect();
-  const t = e.touches ? e.touches[0] : e;
-  return { x: t.clientX - r.left, y: t.clientY - r.top };
+function gPos(e) {
+  const r=canvas.getBoundingClientRect(), t=e.touches?e.touches[0]:e;
+  return {x:(t.clientX-r.left)*(canvas.width/r.width), y:(t.clientY-r.top)*(canvas.height/r.height)};
+}
+canvas.addEventListener('mousedown',e=>{drawing=true;const p=gPos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);});
+canvas.addEventListener('mousemove',e=>{if(!drawing)return;const p=gPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();});
+canvas.addEventListener('mouseup',()=>{drawing=false;capFirma();});
+canvas.addEventListener('mouseleave',()=>{if(drawing){drawing=false;capFirma();}});
+canvas.addEventListener('touchstart',e=>{e.preventDefault();drawing=true;const p=gPos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);},{passive:false});
+canvas.addEventListener('touchmove',e=>{e.preventDefault();if(!drawing)return;const p=gPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();},{passive:false});
+canvas.addEventListener('touchend',()=>{drawing=false;capFirma();});
+
+function capFirma(){
+  firmaHecha=true;
+  document.getElementById('firma_data').value=canvas.toDataURL('image/png');
+  document.getElementById('firma-ok').style.display='inline-flex';
+  document.getElementById('firma-err').style.display='none';
+}
+function clearFirma(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  firmaHecha=false;
+  document.getElementById('firma_data').value='';
+  document.getElementById('firma-ok').style.display='none';
+  document.getElementById('firma-err').style.display='none';
 }
 
-canvas.addEventListener('mousedown', e => { drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
-canvas.addEventListener('mousemove', e => { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
-canvas.addEventListener('mouseup', () => { drawing = false; captureFirma(); });
-canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }, {passive:false});
-canvas.addEventListener('touchmove', e => { e.preventDefault(); if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); }, {passive:false});
-canvas.addEventListener('touchend', () => { drawing = false; captureFirma(); });
-
-function captureFirma() {
-  firmaHecha = true;
-  document.getElementById('firma_data').value = canvas.toDataURL('image/png');
-  document.getElementById('firma-ok').style.display = 'inline-flex';
-}
-function clearFirma() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  firmaHecha = false;
-  document.getElementById('firma_data').value = '';
-  document.getElementById('firma-ok').style.display = 'none';
+// ── FOTOS ──
+function previewFotos(input){
+  const prev=document.getElementById('fotos-preview');
+  prev.innerHTML='';
+  Array.from(input.files).forEach(f=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      const d=document.createElement('div');
+      d.className='col-4 col-md-2';
+      d.innerHTML=`<img src="${e.target.result}" class="foto-thumb">`;
+      prev.appendChild(d);
+    };
+    r.readAsDataURL(f);
+  });
+  document.getElementById('fotos-error').style.display=input.files.length<2?'block':'none';
 }
 
-// ---- FORM VALIDATION ----
-document.getElementById('form-visita').addEventListener('submit', function(e) {
-  const fotos = document.getElementById('input-fotos').files;
-  if (fotos.length < 2) {
-    e.preventDefault();
-    document.getElementById('fotos-error').style.display = 'block';
-    return;
+// ── VALIDACIÓN ──
+function validarVisita(){
+  const fotos=document.getElementById('input-fotos').files;
+  if(fotos.length<2){
+    const el=document.getElementById('fotos-error');
+    el.style.display='block';
+    el.scrollIntoView({behavior:'smooth',block:'center'});
+    return false;
   }
-  if (!firmaHecha || !document.getElementById('firma_data').value) {
-    e.preventDefault();
-    alert('Por favor captura la firma antes de guardar.');
-    return;
+  if(!firmaHecha){
+    const el=document.getElementById('firma-err');
+    el.style.display='inline';
+    el.scrollIntoView({behavior:'smooth',block:'center'});
+    return false;
   }
-});
+  return true;
+}
 
-// Reset modal on close
-document.getElementById('modalNueva').addEventListener('hidden.bs.modal', () => {
+// Reset modal
+document.getElementById('modalNueva').addEventListener('hidden.bs.modal',()=>{
   document.getElementById('form-visita').reset();
-  document.getElementById('fotos-preview').innerHTML = '';
+  document.getElementById('fotos-preview').innerHTML='';
+  document.getElementById('fotos-error').style.display='none';
   clearFirma();
 });
 </script>
