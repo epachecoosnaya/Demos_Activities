@@ -83,8 +83,8 @@
         <h5 class="modal-title"><i class="bi bi-person-plus me-2" style="color:#714B67;"></i>Nuevo usuario</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <form method="POST" action="{{ url_for('crear_usuario') }}">
-        <div class="modal-body">
+      <div class="modal-body">
+        <form id="form-crear-usuario" method="POST" action="{{ url_for('crear_usuario') }}">
           <div class="row g-3">
             <div class="col-12">
               <label class="form-label">Usuario <span class="text-danger">*</span></label>
@@ -124,12 +124,14 @@
               <input class="form-control" name="zona" placeholder="Ej: Norte, CDMX, Guadalajara...">
             </div>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i> Crear usuario</button>
-        </div>
-      </form>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" form="form-crear-usuario" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i> Crear usuario
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -142,9 +144,9 @@
         <h5 class="modal-title"><i class="bi bi-pencil me-2" style="color:#714B67;"></i>Editar usuario</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <form method="POST" action="{{ url_for('actualizar_usuario') }}">
-        <input type="hidden" name="id" id="edit-id">
-        <div class="modal-body">
+      <div class="modal-body">
+        <form id="form-editar-usuario" method="POST" action="{{ url_for('actualizar_usuario') }}">
+          <input type="hidden" name="id" id="edit-id">
           <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label">Nombre</label>
@@ -179,12 +181,14 @@
               <input class="form-control" name="new_password" type="password" placeholder="Nueva contraseña">
             </div>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i> Guardar cambios</button>
-        </div>
-      </form>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" form="form-editar-usuario" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i> Guardar cambios
+        </button>
+      </div>
     </div>
   </div>
 </div>

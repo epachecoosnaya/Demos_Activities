@@ -28,7 +28,8 @@ ALLOWED_EXT    = {"png", "jpg", "jpeg", "webp"}
 
 # ── DB helpers ────────────────────────────────────────────
 def get_db():
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor,
+                            options="-c statement_timeout=30000")
     return conn
 
 def query(sql, params=(), fetchone=False, fetchall=False, commit=False):
