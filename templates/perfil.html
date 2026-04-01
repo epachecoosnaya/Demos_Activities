@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Mi Perfil{% endblock %}
+{% block breadcrumb %}Mi Perfil{% endblock %}
+
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <h1>Mi Perfil</h1>
+    <p>Gestiona tu información personal y seguridad</p>
+  </div>
+</div>
+
+<div class="row g-3">
+
+  <!-- AVATAR + INFO -->
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body" style="text-align:center;padding:28px 20px;">
+        {% if user.foto_url %}
+        <img src="{{ user.foto_url }}" style="width:90px;height:90px;border-radius:50%;object-fit:cover;border:3px solid #e2e5e9;margin-bottom:14px;">
+        {% else %}
+        <div style="width:90px;height:90px;border-radius:50%;background:#714B67;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:#fff;margin:0 auto 14px;">
+          {{ user.usuario[0]|upper }}
+        </div>
+        {% endif %}
+        <div style="font-size:18px;font-weight:600;">{{ user.nombre }} {{ user.apellido }}</div>
+        <div style="font-size:13px;color:#6c757d;margin-top:4px;">@{{ user.usuario }}</div>
+        <div style="margin-top:8px;">
+          {% if user.rol == 'admin' %}
+          <span class="badge-admin">Administrador</span>
+          {% elif user.rol == 'gerente' %}
+          <span style="background:#fff3e0;color:#e65100;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;">Gerente</span>
+          {% elif user.rol == 'supervisor' %}
+          <span style="background:#f3e5f5;color:#7b1fa2;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;">Supervisor</span>
+          {% else %}
+          <span class="badge-vendedor">Vendedor</span>
+          {% endif %}
+        </div>
+        <div style="font-size:12px;color:#adb5bd;margin-top:10px;">
+          <i class="bi bi-calendar3 me-1"></i> Desde {{ user.fecha_creacion[:10] if user.fecha_creacion else '—' }}
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORIAL -->
+    <div class="card mt-3">
+      <div class="card-header"><i class="bi bi-clock-history me-1" style="color:#714B67;"></i> Actividad reciente</div>
+      <div style="max-height:280px;overflow-y:auto;">
+        {% if historial %}
+        {% for h in historial %}
+        <div style="padding:10px 16px;border-bottom:1px solid #f0f1f3;font-size:12.5px;">
+          <div style="font-weight:500;">{{ h.cliente }}</div>
+          <div style="color:#6c757d;font-size:11.5px;margin-top:2px;">
+            <i class="bi bi-calendar2 me-1"></i>{{ h.fecha[:10] }}
+            <span class="ms-2" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:140px;vertical-align:bottom;">{{ h.comentarios }}</span>
+          </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div style="padding:20px;text-align:center;color:#adb5bd;font-size:13px;">Sin actividad aún</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- FORMULARIOS -->
+  <div class="col-md-8">
+
+    <!-- EDITAR PERFIL -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-person-fill me-1" style="color:#714B67;"></i> Información personal</div>
+      <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+          <input type="hidden" name="accion" value="perfil">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Nombre</label>
+              <input class="form-control" name="nombre" value="{{ user.nombre or '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Apellido</label>
+              <input class="form-control" name="apellido" value="{{ user.apellido or '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Email</label>
+              <input class="form-control" name="email" type="email" value="{{ user.email or '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Teléfono</label>
+              <input class="form-control" name="telefono" value="{{ user.telefono or '' }}" placeholder="+52 555 000 0000">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Zona / Territorio</label>
+              <input class="form-control" name="zona" value="{{ user.zona or '' }}" placeholder="Ej: Norte, CDMX...">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Foto de perfil</label>
+              <input class="form-control" name="foto_perfil" type="file" accept=".png,.jpg,.jpeg,.webp">
+              <div style="font-size:11.5px;color:#adb5bd;margin-top:4px;">PNG, JPG, WEBP — máx 2MB</div>
+            </div>
+          </div>
+          <div style="margin-top:16px;text-align:right;">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i> Guardar perfil
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- CAMBIAR PASSWORD -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-lock-fill me-1" style="color:#714B67;"></i> Cambiar contraseña</div>
+      <div class="card-body">
+        <form method="POST">
+          <input type="hidden" name="accion" value="password">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Contraseña actual</label>
+              <input class="form-control" name="password_actual" type="password" required placeholder="Tu contraseña actual">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Nueva contraseña</label>
+              <input class="form-control" name="password_nueva" type="password" required placeholder="Mínimo 4 caracteres">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Confirmar contraseña</label>
+              <input class="form-control" name="password_confirma" type="password" required placeholder="Repite la nueva contraseña">
+            </div>
+          </div>
+          <div style="margin-top:16px;text-align:right;">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-shield-lock me-1"></i> Cambiar contraseña
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

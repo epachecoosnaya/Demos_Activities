@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Configuración{% endblock %}
+{% block breadcrumb %}Configuración{% endblock %}
+
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <h1>Configuración</h1>
+    <p>Ajustes generales del portal</p>
+  </div>
+</div>
+
+<div class="row g-3">
+
+  <!-- STATS DEL SISTEMA -->
+  <div class="col-12">
+    <div class="row g-3">
+      <div class="col-4">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#f0e6f0;"><i class="bi bi-people-fill" style="color:#714B67;"></i></div>
+          <div><div class="stat-val">{{ stats.usuarios }}</div><div class="stat-lbl">Usuarios activos</div></div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#e6f4ea;"><i class="bi bi-map-fill" style="color:#1e7e34;"></i></div>
+          <div><div class="stat-val">{{ stats.visitas }}</div><div class="stat-lbl">Visitas totales</div></div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#e8f0fe;"><i class="bi bi-images" style="color:#1a56db;"></i></div>
+          <div><div class="stat-val">{{ stats.fotos }}</div><div class="stat-lbl">Fotos subidas</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIG GENERAL -->
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-gear-fill me-1" style="color:#714B67;"></i> Portal</div>
+      <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Nombre de la empresa</label>
+              <input class="form-control" name="empresa" value="{{ config.empresa or 'Altasolucion' }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Descripción / Slogan</label>
+              <input class="form-control" name="descripcion" value="{{ config.descripcion or '' }}" placeholder="Ej: Portal de Actividades de Campo">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Color principal</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="color" name="color_primario" value="{{ config.color_primario or '#714B67' }}"
+                       style="width:48px;height:38px;border-radius:7px;border:1px solid #ced4da;cursor:pointer;padding:2px;">
+                <input class="form-control" id="color-hex" value="{{ config.color_primario or '#714B67' }}"
+                       style="font-family:monospace;" readonly>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Logo del portal</label>
+              <input class="form-control" name="logo" type="file" accept=".png,.jpg,.jpeg,.webp">
+            </div>
+            {% if config.logo_url %}
+            <div class="col-12">
+              <label class="form-label">Logo actual</label><br>
+              <img src="{{ config.logo_url }}" style="height:48px;border-radius:8px;border:1px solid #e2e5e9;">
+            </div>
+            {% endif %}
+          </div>
+          <div style="margin-top:18px;text-align:right;">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i> Guardar configuración
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- INFO DEL SISTEMA -->
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-info-circle me-1" style="color:#714B67;"></i> Información del sistema</div>
+      <div class="card-body">
+        <table class="table table-borderless" style="font-size:13px;margin:0;">
+          <tr><td style="color:#6c757d;font-weight:500;">Versión</td><td>v2.0 — Supabase</td></tr>
+          <tr><td style="color:#6c757d;font-weight:500;">Base de datos</td><td>PostgreSQL (Supabase)</td></tr>
+          <tr><td style="color:#6c757d;font-weight:500;">Storage</td><td>Supabase Storage</td></tr>
+          <tr><td style="color:#6c757d;font-weight:500;">Deploy</td><td>Render.com</td></tr>
+          <tr><td style="color:#6c757d;font-weight:500;">Framework</td><td>Flask 2.3</td></tr>
+          <tr><td style="color:#6c757d;font-weight:500;">Python</td><td>3.11</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- ACCESOS RÁPIDOS -->
+    <div class="card mt-3">
+      <div class="card-header"><i class="bi bi-lightning-fill me-1" style="color:#714B67;"></i> Accesos rápidos</div>
+      <div class="card-body" style="padding:12px;">
+        <a href="{{ url_for('usuarios') }}" class="btn btn-outline-primary btn-sm w-100 mb-2">
+          <i class="bi bi-people me-1"></i> Gestionar usuarios
+        </a>
+        <a href="{{ url_for('visitas') }}" class="btn btn-outline-primary btn-sm w-100 mb-2">
+          <i class="bi bi-map me-1"></i> Ver todas las visitas
+        </a>
+        <a href="{{ url_for('perfil') }}" class="btn btn-outline-secondary btn-sm w-100">
+          <i class="bi bi-person me-1"></i> Mi perfil
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelector('[name=color_primario]').oninput = function() {
+  document.getElementById('color-hex').value = this.value;
+};
+</script>
+{% endblock %}

@@ -213,11 +213,16 @@
 
     <div class="nav-section">En desarrollo</div>
     <a class="nav-link-item disabled"><i class="bi bi-bar-chart-fill"></i> Reportes <span class="nav-badge">Pronto</span></a>
-    <a class="nav-link-item disabled"><i class="bi bi-gear-fill"></i> Configuración <span class="nav-badge">Pronto</span></a>
+    <a href="{{ url_for('configuracion') }}" class="nav-link-item {% if request.endpoint == 'configuracion' %}active{% endif %}">
+      <i class="bi bi-gear-fill"></i> Configuración
+    </a>
     <a class="nav-link-item disabled"><i class="bi bi-robot"></i> Asistente IA <span class="nav-badge">Pronto</span></a>
   </nav>
 
   <div class="sidebar-user">
+    <a href="{{ url_for('perfil') }}" class="nav-link-item {% if request.endpoint == 'perfil' %}active{% endif %}" style="margin-bottom:4px;">
+      <i class="bi bi-person-circle"></i> Mi perfil
+    </a>
     <div class="user-row" onclick="window.location='{{ url_for('logout') }}'">
       <div class="user-avatar">{{ session.get('usuario', 'U')[0]|upper }}</div>
       <div style="flex:1;min-width:0;">

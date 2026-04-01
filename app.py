@@ -346,5 +346,118 @@ def actualizar_usuario():
     return redirect(url_for("usuarios"))
 
 
+
+# ── PERFIL ────────────────────────────────────────────────
+@app.route("/perfil", methods=["GET","POST"])
+def perfil():
+    if not logged_in(): return redirect(url_for("login"))
+    uid = session["user_id"]
+    user = query("SELECT * FROM usuarios WHERE id=%s", (uid,), fetchone=True)
+
+    if request.method == "POST":
+        accion = request.form.get("accion","")
+
+        if accion == "perfil":
+            nombre   = request.form.get("nombre","").strip()
+            apellido = request.form.get("apellido","").strip()
+            email    = request.form.get("email","").strip()
+            telefono = request.form.get("telefono","").strip()
+            zona     = request.form.get("zona","").strip()
+            foto_url = user.get("foto_url") or ""
+            foto = request.files.get("foto_perfil")
+            if foto and foto.filename and allowed_file(foto.filename):
+                try:
+                    ext  = foto.filename.rsplit(".",1)[1].lower()
+                    name = f"perfil_{uid}_{uuid.uuid4().hex}.{ext}"
+                    data = foto.read()
+                    supabase.storage.from_("avatares").upload(name, data, {"content-type": f"image/{ext}"})
+                    foto_url = supabase.storage.from_("avatares").get_public_url(name)
+                except Exception as e:
+                    flash(f"Error subiendo foto: {e}", "danger")
+            try:
+                query("UPDATE usuarios SET nombre=%s,apellido=%s,email=%s,telefono=%s,zona=%s,foto_url=%s WHERE id=%s",
+                      (nombre,apellido,email,telefono,zona,foto_url,uid), commit=True)
+                flash("Perfil actualizado correctamente", "success")
+            except Exception:
+                flash("El email ya esta en uso.", "danger")
+
+        elif accion == "password":
+            actual   = request.form.get("password_actual","")
+            nueva    = request.form.get("password_nueva","")
+            confirma = request.form.get("password_confirma","")
+            if not check_password_hash(user["password"], actual):
+                flash("La contrasena actual es incorrecta.", "danger")
+            elif nueva != confirma:
+                flash("Las contrasenas nuevas no coinciden.", "danger")
+            elif len(nueva) < 4:
+                flash("La contrasena debe tener al menos 4 caracteres.", "danger")
+            else:
+                query("UPDATE usuarios SET password=%s WHERE id=%s",
+                      (generate_password_hash(nueva), uid), commit=True)
+                flash("Contrasena cambiada correctamente", "success")
+
+        return redirect(url_for("perfil"))
+
+    historial = query("""SELECT fecha, cliente, comentarios FROM actividades
+                         WHERE usuario_id=%s ORDER BY fecha DESC LIMIT 10""",
+                      (uid,), fetchall=True)
+    return render_template("perfil.html", empresa=EMPRESA, logo=LOGO, user=user, historial=historial)
+
+
+# ── CONFIGURACION (solo admin) ─────────────────────────────
+@app.route("/configuracion", methods=["GET","POST"])
+def configuracion():
+    if not logged_in(): return redirect(url_for("login"))
+    if not is_admin(): abort(403)
+    config = query("SELECT * FROM config WHERE id=1", fetchone=True)
+    if not config:
+        query("INSERT INTO config (id,empresa,logo_url,color_primario,descripcion) VALUES (1,%s,%s,%s,%s)",
+              (EMPRESA,"","#714B67",""), commit=True)
+        config = query("SELECT * FROM config WHERE id=1", fetchone=True)
+
+    if request.method == "POST":
+        empresa     = request.form.get("empresa","").strip() or EMPRESA
+        color       = request.form.get("color_primario","#714B67").strip()
+        descripcion = request.form.get("descripcion","").strip()
+        logo_url    = config.get("logo_url","")
+        logo = request.files.get("logo")
+        if logo and logo.filename and allowed_file(logo.filename):
+            try:
+                ext  = logo.filename.rsplit(".",1)[1].lower()
+                name = f"logo_{uuid.uuid4().hex}.{ext}"
+                data = logo.read()
+                supabase.storage.from_("avatares").upload(name, data, {"content-type": f"image/{ext}"})
+                logo_url = supabase.storage.from_("avatares").get_public_url(name)
+            except Exception as e:
+                flash(f"Error subiendo logo: {e}", "danger")
+        query("UPDATE config SET empresa=%s,logo_url=%s,color_primario=%s,descripcion=%s WHERE id=1",
+              (empresa,logo_url,color,descripcion), commit=True)
+        flash("Configuracion guardada", "success")
+        return redirect(url_for("configuracion"))
+
+    stats = {
+        "usuarios": query("SELECT COUNT(*) AS c FROM usuarios WHERE activo=1", fetchone=True)["c"],
+        "visitas":  query("SELECT COUNT(*) AS c FROM actividades", fetchone=True)["c"],
+        "fotos":    query("SELECT COUNT(*) AS c FROM fotos", fetchone=True)["c"],
+    }
+    return render_template("configuracion.html", empresa=EMPRESA, logo=LOGO, config=config, stats=stats)
+
+
+# ── OLVIDE PASSWORD ────────────────────────────────────────
+@app.route("/olvide-password", methods=["GET","POST"])
+def olvide_password():
+    msg = None
+    if request.method == "POST":
+        email = request.form.get("email","").strip()
+        user  = query("SELECT * FROM usuarios WHERE email=%s AND activo=1", (email,), fetchone=True)
+        msg   = "Si el email existe, contacta al administrador para restablecer tu contrasena."
+        if user:
+            try:
+                query("INSERT INTO solicitudes_reset (usuario_id,email,fecha) VALUES (%s,%s,%s)",
+                      (user["id"],email,datetime.now().strftime("%Y-%m-%d %H:%M")), commit=True)
+            except Exception:
+                pass
+    return render_template("olvide_password.html", empresa=EMPRESA, logo=LOGO, msg=msg)
+
 if __name__ == "__main__":
     app.run(debug=True)
