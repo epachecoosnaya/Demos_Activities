@@ -11,7 +11,7 @@
 </div>
 
 <!-- STATS -->
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-4" id="stats-row">
   <div class="col-6 col-md-3">
     <div class="stat-card">
       <div class="stat-icon" style="background:#f0e6f0;">
@@ -53,6 +53,17 @@
       <div>
         <div class="stat-val">{{ stats.total_fotos }}</div>
         <div class="stat-lbl">Fotos subidas</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#f3e5f5;">
+        <i class="bi bi-calendar3" style="color:#7b1fa2;"></i>
+      </div>
+      <div>
+        <div class="stat-val">{{ stats.eventos_hoy }}</div>
+        <div class="stat-lbl">Eventos hoy</div>
       </div>
     </div>
   </div>
@@ -111,6 +122,32 @@
     </div>
   </div>
 </div>
+
+<!-- PROXIMOS EVENTOS -->
+{% if proximos %}
+<div class="card mb-3">
+  <div class="card-header">
+    <i class="bi bi-calendar3" style="color:#714B67;"></i>
+    Próximos eventos
+    <a href="{{ url_for('calendario') }}" class="btn btn-sm btn-outline-primary ms-auto">Ver calendario</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead><tr><th>Evento</th><th>Fecha</th><th>Hora</th>{% if rol == 'admin' or rol == 'gerente' %}<th>Usuario</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for p in proximos %}
+        <tr>
+          <td><b>{{ p.titulo }}</b></td>
+          <td style="font-size:13px;">{{ p.fecha_inicio }}</td>
+          <td style="font-size:13px;color:#6c757d;">{{ p.hora_inicio or 'Todo el día' }}</td>
+          {% if rol == 'admin' or rol == 'gerente' %}<td><span class="badge-vendedor">{{ p.usuario }}</span></td>{% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 <!-- RECENT ACTIVITY -->
 {% if visitas_recientes %}

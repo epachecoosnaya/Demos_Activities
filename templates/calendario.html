@@ -1,0 +1,363 @@
+{% extends "base.html" %}
+{% block title %}Calendario{% endblock %}
+{% block breadcrumb %}Calendario{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+<style>
+  .fc { font-family: 'Inter', sans-serif; font-size: 13px; }
+  .fc-toolbar-title { font-size: 16px !important; font-weight: 600 !important; }
+  .fc-button { border-radius: 7px !important; font-size: 12.5px !important; font-weight: 500 !important; }
+  .fc-button-primary { background: #714B67 !important; border-color: #714B67 !important; }
+  .fc-button-primary:hover { background: #875A7B !important; border-color: #875A7B !important; }
+  .fc-button-primary:not(:disabled).fc-button-active { background: #5a3a52 !important; border-color: #5a3a52 !important; }
+  .fc-day-today { background: rgba(113,75,103,0.06) !important; }
+  .fc-event { border-radius: 5px !important; font-size: 12px !important; cursor: pointer; }
+  .fc-col-header-cell { font-weight: 600 !important; font-size: 12px !important; color: #6c757d !important; text-transform: uppercase; letter-spacing: 0.5px; }
+  .tipo-badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 500; }
+  .tipo-visita    { background:#f0e6f0;color:#714B67; }
+  .tipo-reunion   { background:#e8f0fe;color:#1a56db; }
+  .tipo-llamada   { background:#e6f4ea;color:#1e7e34; }
+  .tipo-otro      { background:#fff3e0;color:#e65100; }
+
+  /* MODAL */
+  .ev-modal-overlay {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4);
+    z-index:2000; align-items:center; justify-content:center;
+  }
+  .ev-modal-overlay.open { display:flex; }
+  .ev-modal {
+    background:#fff; border-radius:14px; padding:28px;
+    width:100%; max-width:480px; max-height:90vh; overflow-y:auto;
+    box-shadow:0 20px 60px rgba(0,0,0,0.2);
+  }
+  .ev-modal h5 { font-size:16px; font-weight:600; margin-bottom:18px; }
+  .ev-detail-row { display:flex; gap:10px; margin-bottom:10px; font-size:13.5px; }
+  .ev-detail-label { color:#6c757d; min-width:80px; font-weight:500; }
+  .ev-close { float:right; background:none; border:none; font-size:20px; cursor:pointer; color:#adb5bd; margin-top:-4px; }
+  .ev-close:hover { color:#333; }
+
+  /* NOTIFICACIONES BADGE */
+  .notif-badge {
+    position:absolute; top:-4px; right:-4px;
+    background:#c5221f; color:#fff; border-radius:50%;
+    width:16px; height:16px; font-size:9px; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <h1>Calendario</h1>
+    <p>Agenda y programación de actividades</p>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    {% if session.get('rol') in ['admin','gerente','supervisor'] and users %}
+    <select id="filtro-usuario" class="form-select form-select-sm" style="width:180px;" onchange="cambiarUsuario(this.value)">
+      <option value="{{ session.user_id if session.user_id else '' }}">— Mi calendario —</option>
+      {% for u in users %}
+      {% if u.id != session.get('user_id') %}
+      <option value="{{ u.id }}">{{ u.nombre or u.usuario }} ({{ u.rol }})</option>
+      {% endif %}
+      {% endfor %}
+    </select>
+    {% endif %}
+    {% if perms.crear %}
+    <button class="btn btn-primary" onclick="abrirModalNuevo()">
+      <i class="bi bi-plus-lg me-1"></i> Nuevo evento
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- PRÓXIMOS EVENTOS HILO -->
+<div id="proximos-strip" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;"></div>
+
+<!-- CALENDARIO -->
+<div class="card">
+  <div class="card-body" style="padding:16px;">
+    <div id="calendar"></div>
+  </div>
+</div>
+
+<!-- MODAL VER EVENTO -->
+<div class="ev-modal-overlay" id="modal-ver">
+  <div class="ev-modal">
+    <button class="ev-close" onclick="cerrarModal('modal-ver')">×</button>
+    <h5 id="ver-titulo">—</h5>
+    <div id="ver-tipo-badge" class="tipo-badge mb-3"></div>
+    <div class="ev-detail-row"><span class="ev-detail-label">Fecha</span><span id="ver-fecha">—</span></div>
+    <div class="ev-detail-row"><span class="ev-detail-label">Hora</span><span id="ver-hora">—</span></div>
+    <div class="ev-detail-row" id="ver-cliente-row"><span class="ev-detail-label">Cliente</span><span id="ver-cliente">—</span></div>
+    <div class="ev-detail-row" id="ver-ubi-row"><span class="ev-detail-label">Ubicación</span><span id="ver-ubi">—</span></div>
+    <div class="ev-detail-row" id="ver-user-row"><span class="ev-detail-label">Usuario</span><span id="ver-user">—</span></div>
+    <div class="ev-detail-row" id="ver-desc-row"><span class="ev-detail-label">Notas</span><span id="ver-desc">—</span></div>
+    <div style="margin-top:16px;display:flex;gap:8px;">
+      <button class="btn btn-outline-secondary btn-sm" onclick="cerrarModal('modal-ver')">Cerrar</button>
+      {% if perms.eliminar %}
+      <button class="btn btn-sm" style="background:#fce8e6;color:#c5221f;border:none;" id="btn-eliminar-ev" onclick="eliminarEvento()">
+        <i class="bi bi-trash me-1"></i> Eliminar
+      </button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CREAR EVENTO -->
+{% if perms.crear %}
+<div class="ev-modal-overlay" id="modal-nuevo">
+  <div class="ev-modal">
+    <button class="ev-close" onclick="cerrarModal('modal-nuevo')">×</button>
+    <h5>Nuevo evento</h5>
+    <div class="row g-3">
+      <div class="col-12">
+        <label class="form-label">Título <span class="text-danger">*</span></label>
+        <input class="form-control" id="n-titulo" placeholder="Ej: Visita a cliente ABC">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Tipo</label>
+        <select class="form-select" id="n-tipo" onchange="cambiarColorTipo(this.value)">
+          <option value="visita">🗺 Visita</option>
+          <option value="reunion">📋 Reunión</option>
+          <option value="llamada">📞 Llamada</option>
+          <option value="otro">📌 Otro</option>
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Color</label>
+        <input type="color" id="n-color" value="#714B67" style="width:100%;height:38px;border-radius:7px;border:1px solid #ced4da;cursor:pointer;">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Fecha inicio <span class="text-danger">*</span></label>
+        <input class="form-control" id="n-fecha-inicio" type="date">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Fecha fin</label>
+        <input class="form-control" id="n-fecha-fin" type="date">
+      </div>
+      <div class="col-md-6" id="hora-row">
+        <label class="form-label">Hora inicio</label>
+        <input class="form-control" id="n-hora-inicio" type="time" value="09:00">
+      </div>
+      <div class="col-md-6" id="hora-fin-row">
+        <label class="form-label">Hora fin</label>
+        <input class="form-control" id="n-hora-fin" type="time" value="10:00">
+      </div>
+      <div class="col-12">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="n-todo-dia" onchange="toggleTodoDia(this.checked)">
+          <label class="form-check-label" style="font-size:13px;">Todo el día</label>
+        </div>
+      </div>
+      <div class="col-12">
+        <label class="form-label">Cliente</label>
+        <input class="form-control" id="n-cliente" placeholder="Nombre del cliente">
+      </div>
+      <div class="col-12">
+        <label class="form-label">Ubicación</label>
+        <input class="form-control" id="n-ubicacion" placeholder="Dirección o lugar">
+      </div>
+      <div class="col-12">
+        <label class="form-label">Notas</label>
+        <textarea class="form-control" id="n-desc" rows="2" placeholder="Descripción adicional..."></textarea>
+      </div>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-outline-secondary" onclick="cerrarModal('modal-nuevo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEvento()">
+        <i class="bi bi-check-lg me-1"></i> Guardar evento
+      </button>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script>
+let calendar;
+let currentEventId = null;
+let currentUserId = '{{ session.get("user_id","") }}';
+
+const COLORES_TIPO = {
+  visita:  '#714B67',
+  reunion: '#1a56db',
+  llamada: '#1e7e34',
+  otro:    '#e65100'
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+  const calEl = document.getElementById('calendar');
+  calendar = new FullCalendar.Calendar(calEl, {
+    initialView: 'dayGridMonth',
+    locale: 'es',
+    headerToolbar: {
+      left:   'prev,next today',
+      center: 'title',
+      right:  'dayGridMonth,timeGridWeek,listWeek'
+    },
+    buttonText: { today:'Hoy', month:'Mes', week:'Semana', list:'Lista' },
+    height: 'auto',
+    firstDay: 1,
+    events: fetchEventos,
+    eventClick: function(info) {
+      mostrarEvento(info.event);
+    },
+    dateClick: function(info) {
+      {% if perms.crear %}
+      document.getElementById('n-fecha-inicio').value = info.dateStr;
+      document.getElementById('n-fecha-fin').value    = info.dateStr;
+      abrirModalNuevo();
+      {% endif %}
+    },
+    eventDidMount: function(info) {
+      info.el.title = info.event.extendedProps.descripcion || info.event.title;
+    }
+  });
+  calendar.render();
+  cargarProximos();
+});
+
+function fetchEventos(info, successCb, failureCb) {
+  fetch(`/calendario/eventos?usuario_id=${currentUserId}&start=${info.startStr}&end=${info.endStr}`)
+    .then(r => r.json()).then(successCb).catch(failureCb);
+}
+
+function cambiarUsuario(uid) {
+  currentUserId = uid;
+  calendar.refetchEvents();
+  cargarProximos();
+}
+
+function cargarProximos() {
+  const today = new Date().toISOString().split('T')[0];
+  const end   = new Date(Date.now() + 7*86400000).toISOString().split('T')[0];
+  fetch(`/calendario/eventos?usuario_id=${currentUserId}&start=${today}&end=${end}`)
+    .then(r=>r.json()).then(evs => {
+      const strip = document.getElementById('proximos-strip');
+      strip.innerHTML = '';
+      if (!evs.length) {
+        strip.innerHTML = '<div style="font-size:12px;color:#adb5bd;padding:6px 0;">Sin eventos esta semana</div>';
+        return;
+      }
+      evs.slice(0,5).forEach(ev => {
+        const d = document.createElement('div');
+        d.style.cssText = `background:#fff;border:1px solid #e2e5e9;border-left:4px solid ${ev.color};border-radius:8px;padding:8px 12px;font-size:12px;min-width:160px;cursor:pointer;`;
+        d.innerHTML = `<div style="font-weight:600;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;">${ev.title}</div>
+          <div style="color:#6c757d;margin-top:2px;">${ev.start.slice(0,10)} ${ev.extendedProps.hora_inicio||''}</div>`;
+        strip.appendChild(d);
+      });
+    });
+}
+
+function mostrarEvento(event) {
+  currentEventId = event.id;
+  document.getElementById('ver-titulo').textContent = event.title;
+  const tipo = event.extendedProps.tipo || 'otro';
+  const badge = document.getElementById('ver-tipo-badge');
+  badge.textContent = tipo.charAt(0).toUpperCase()+tipo.slice(1);
+  badge.className = `tipo-badge tipo-${tipo}`;
+  const start = event.start;
+  document.getElementById('ver-fecha').textContent = start ? start.toLocaleDateString('es-MX',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) : '—';
+  const hi = event.extendedProps.hora_inicio || '';
+  const hf = event.extendedProps.hora_fin || '';
+  document.getElementById('ver-hora').textContent = hi ? `${hi}${hf?' – '+hf:''}` : 'Todo el día';
+  const cliente = event.extendedProps.cliente || '';
+  document.getElementById('ver-cliente-row').style.display = cliente ? '' : 'none';
+  document.getElementById('ver-cliente').textContent = cliente;
+  const ubi = event.extendedProps.ubicacion || '';
+  document.getElementById('ver-ubi-row').style.display = ubi ? '' : 'none';
+  document.getElementById('ver-ubi').textContent = ubi;
+  const user = event.extendedProps.usuario || '';
+  document.getElementById('ver-user-row').style.display = user ? '' : 'none';
+  document.getElementById('ver-user').textContent = user;
+  const desc = event.extendedProps.descripcion || '';
+  document.getElementById('ver-desc-row').style.display = desc ? '' : 'none';
+  document.getElementById('ver-desc').textContent = desc;
+  document.getElementById('modal-ver').classList.add('open');
+}
+
+function abrirModalNuevo() {
+  if (!document.getElementById('modal-nuevo')) return;
+  const today = new Date().toISOString().split('T')[0];
+  if (!document.getElementById('n-fecha-inicio').value)
+    document.getElementById('n-fecha-inicio').value = today;
+  if (!document.getElementById('n-fecha-fin').value)
+    document.getElementById('n-fecha-fin').value = today;
+  document.getElementById('modal-nuevo').classList.add('open');
+}
+
+function cerrarModal(id) {
+  document.getElementById(id).classList.remove('open');
+  currentEventId = null;
+}
+
+function cambiarColorTipo(tipo) {
+  document.getElementById('n-color').value = COLORES_TIPO[tipo] || '#714B67';
+}
+
+function toggleTodoDia(checked) {
+  document.getElementById('hora-row').style.display     = checked ? 'none' : '';
+  document.getElementById('hora-fin-row').style.display = checked ? 'none' : '';
+}
+
+async function guardarEvento() {
+  const titulo = document.getElementById('n-titulo').value.trim();
+  if (!titulo) { alert('El título es obligatorio'); return; }
+  const fi = document.getElementById('n-fecha-inicio').value;
+  if (!fi) { alert('La fecha de inicio es obligatoria'); return; }
+  const todoDia = document.getElementById('n-todo-dia').checked;
+  const data = {
+    titulo,
+    descripcion:   document.getElementById('n-desc').value.trim(),
+    fecha_inicio:  fi,
+    fecha_fin:     document.getElementById('n-fecha-fin').value || fi,
+    hora_inicio:   todoDia ? '' : document.getElementById('n-hora-inicio').value,
+    hora_fin:      todoDia ? '' : document.getElementById('n-hora-fin').value,
+    tipo:          document.getElementById('n-tipo').value,
+    color:         document.getElementById('n-color').value,
+    cliente:       document.getElementById('n-cliente').value.trim(),
+    ubicacion:     document.getElementById('n-ubicacion').value.trim(),
+    todo_el_dia:   todoDia,
+  };
+  const res = await fetch('/calendario/crear', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+  });
+  const json = await res.json();
+  if (json.ok) {
+    cerrarModal('modal-nuevo');
+    calendar.refetchEvents();
+    cargarProximos();
+    // Reset form
+    ['n-titulo','n-desc','n-cliente','n-ubicacion'].forEach(id => document.getElementById(id).value='');
+    document.getElementById('n-todo-dia').checked = false;
+    toggleTodoDia(false);
+  } else {
+    alert('Error: ' + (json.msg||'Intenta de nuevo'));
+  }
+}
+
+async function eliminarEvento() {
+  if (!currentEventId) return;
+  if (!confirm('¿Eliminar este evento?')) return;
+  const res = await fetch(`/calendario/eliminar/${currentEventId}`, {method:'POST'});
+  const json = await res.json();
+  if (json.ok) {
+    cerrarModal('modal-ver');
+    calendar.refetchEvents();
+    cargarProximos();
+  } else {
+    alert('Error al eliminar');
+  }
+}
+
+// Cerrar modales al click fuera
+['modal-ver','modal-nuevo'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('click', e => { if(e.target === el) cerrarModal(id); });
+});
+</script>
+{% endblock %}

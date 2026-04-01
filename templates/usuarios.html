@@ -64,7 +64,7 @@
           <td style="font-size:12px;color:#adb5bd;">{{ u.fecha_creacion[:10] if u.fecha_creacion else '—' }}</td>
           <td>
             <button class="btn btn-sm btn-outline-primary"
-              onclick="abrirEditar({{ u.id }}, '{{ u.nombre }}', '{{ u.apellido }}', '{{ u.email }}', '{{ u.rol }}', {{ u.activo }})">
+              onclick="abrirEditar({{ u.id }}, '{{ u.nombre }}', '{{ u.apellido }}', '{{ u.email }}', '{{ u.rol }}', {{ u.activo }}, '{{ u.supervisor_id or '' }}')">
               <i class="bi bi-pencil"></i>
             </button>
           </td>
@@ -123,6 +123,15 @@
               <label class="form-label">Zona / Territorio</label>
               <input class="form-control" name="zona" placeholder="Ej: Norte, CDMX, Guadalajara...">
             </div>
+            <div class="col-12">
+              <label class="form-label">Supervisor / Jefe directo</label>
+              <select class="form-select" name="supervisor_id">
+                <option value="">— Sin supervisor —</option>
+                {% for u in all_users %}
+                <option value="{{ u.id }}">{{ u.nombre or u.usuario }}</option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
         </form>
       </div>
@@ -180,6 +189,15 @@
               <label class="form-label">Nueva contraseña <span style="color:#adb5bd;font-weight:400;">(dejar vacío para no cambiar)</span></label>
               <input class="form-control" name="new_password" type="password" placeholder="Nueva contraseña">
             </div>
+            <div class="col-12">
+              <label class="form-label">Supervisor / Jefe directo</label>
+              <select class="form-select" name="supervisor_id" id="edit-supervisor">
+                <option value="">— Sin supervisor —</option>
+                {% for u in all_users %}
+                <option value="{{ u.id }}">{{ u.nombre or u.usuario }}</option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
         </form>
       </div>
@@ -196,13 +214,16 @@
 
 {% block extra_js %}
 <script>
-function abrirEditar(id, nombre, apellido, email, rol, activo) {
+function abrirEditar(id, nombre, apellido, email, rol, activo, supId) {
   document.getElementById('edit-id').value = id;
   document.getElementById('edit-nombre').value = nombre;
   document.getElementById('edit-apellido').value = apellido;
   document.getElementById('edit-email').value = email;
   document.getElementById('edit-rol').value = rol;
   document.getElementById('edit-activo').value = activo;
+  if (document.getElementById('edit-supervisor')) {
+    document.getElementById('edit-supervisor').value = supId || '';
+  }
   new bootstrap.Modal(document.getElementById('modalEditar')).show();
 }
 </script>

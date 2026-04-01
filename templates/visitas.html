@@ -8,9 +8,11 @@
     <h1>Visitas</h1>
     <p>Registro de actividades de campo</p>
   </div>
+  {% if perms.crear %}
   <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNueva">
     <i class="bi bi-plus-lg me-1"></i> Nueva visita
   </button>
+  {% endif %}
 </div>
 
 <!-- ═══ RECORDATORIOS ═══ -->
@@ -99,9 +101,19 @@
             {% endif %}
           </td>
           <td>
-            <a href="{{ url_for('detalle_visita', actividad_id=a.id) }}" class="btn btn-sm btn-outline-primary">
-              <i class="bi bi-eye"></i>
-            </a>
+            <div style="display:flex;gap:4px;">
+              <a href="{{ url_for('detalle_visita', actividad_id=a.id) }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-eye"></i>
+              </a>
+              {% if perms.eliminar %}
+              <form method="POST" action="{{ url_for('eliminar_visita', actividad_id=a.id) }}"
+                    onsubmit="return confirm('¿Eliminar esta visita?')">
+                <button type="submit" class="btn btn-sm" style="background:#fce8e6;color:#c5221f;border:none;">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -112,9 +124,11 @@
   <div style="padding:50px;text-align:center;color:#adb5bd;">
     <i class="bi bi-map" style="font-size:40px;display:block;margin-bottom:12px;"></i>
     No hay visitas registradas aún.<br>
+    {% if perms.crear %}
     <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalNueva">
       <i class="bi bi-plus-lg me-1"></i> Registrar primera visita
     </button>
+    {% endif %}
   </div>
   {% endif %}
 </div>

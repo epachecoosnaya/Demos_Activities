@@ -205,6 +205,9 @@
     <a href="{{ url_for('visitas') }}" class="nav-link-item {% if 'visita' in request.endpoint %}active{% endif %}">
       <i class="bi bi-map-fill"></i> Visitas
     </a>
+    <a href="{{ url_for('calendario') }}" class="nav-link-item {% if request.endpoint == 'calendario' %}active{% endif %}">
+      <i class="bi bi-calendar3"></i> Calendario
+    </a>
     {% if session.get('rol') == 'admin' %}
     <a href="{{ url_for('usuarios') }}" class="nav-link-item {% if request.endpoint == 'usuarios' %}active{% endif %}">
       <i class="bi bi-people-fill"></i> Usuarios
