@@ -70,6 +70,45 @@
       </div>
     </div>
 
+    <!-- SAP SYNC STATUS -->
+    <div class="card mb-3" style="border-left:4px solid {% if ls.sap_sync_status == 'ok' %}#16a34a{% elif ls.sap_sync_status == 'error' %}#c5221f{% else %}#adb5bd{% endif %};">
+      <div class="card-body" style="padding:12px 16px;">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:#6c757d;margin-bottom:6px;">
+          Sincronización SAP B1
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          {% if ls.sap_sync_status == 'ok' %}
+            <i class="bi bi-check-circle-fill" style="color:#16a34a;font-size:16px;"></i>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#16a34a;">Sincronizado</div>
+              {% if ls.sap_doc_entry %}
+              <div style="font-size:12px;color:#6c757d;">SAP ID: <b style="font-family:monospace;">{{ ls.sap_doc_entry }}</b></div>
+              {% endif %}
+            </div>
+          {% elif ls.sap_sync_status == 'error' %}
+            <i class="bi bi-exclamation-triangle-fill" style="color:#c5221f;font-size:16px;"></i>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#c5221f;">Error SAP</div>
+              <div style="font-size:11.5px;color:#6c757d;line-height:1.4;">{{ ls.sap_sync_msg or 'Sin detalles' }}</div>
+            </div>
+          {% else %}
+            <i class="bi bi-clock" style="color:#adb5bd;font-size:16px;"></i>
+            <div style="font-size:13px;color:#adb5bd;">Pendiente de sincronizar</div>
+          {% endif %}
+        </div>
+        {% if ls.sap_sync_fecha %}
+        <div style="font-size:11px;color:#adb5bd;margin-top:6px;">{{ ls.sap_sync_fecha[:16] }}</div>
+        {% endif %}
+        {% if ls.sap_sync_status == 'error' and get_perms('servicios').get('editar') %}
+        <form method="POST" action="{{ url_for('reintentar_sap', llamada_id=ls.id) }}" style="margin-top:8px;">
+          <button type="submit" class="btn btn-sm btn-outline-danger" style="font-size:12px;">
+            <i class="bi bi-arrow-clockwise me-1"></i> Reintentar envío a SAP
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
     <!-- DATOS CRM -->
     <div class="card mb-3">
       <div class="card-header"><i class="bi bi-info-circle me-1" style="color:#714B67;"></i> Detalles</div>

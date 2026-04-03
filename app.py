@@ -20,6 +20,13 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# ── SAP Service Layer config ──────────────────────────────
+SAP_BASE_URL   = os.environ.get("SAP_BASE_URL","").rstrip("/")
+SAP_COMPANY_DB = os.environ.get("SAP_COMPANY_DB","")
+SAP_USER       = os.environ.get("SAP_USER","")
+SAP_PASSWORD   = os.environ.get("SAP_PASSWORD","")
+SAP_VERIFY_SSL = os.environ.get("SAP_VERIFY_SSL","false").lower() == "true"
+
 BUCKET_FOTOS  = "fotos"
 BUCKET_FIRMAS = "firmas"
 BUCKET_AVA    = "avatares"
@@ -158,6 +165,139 @@ def init_db():
     conn.commit(); cur.close(); conn.close()
 
 init_db()
+
+# ── SAP SERVICE LAYER HELPERS ─────────────────────────────
+import requests as _req
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+def sap_login():
+    """Abre sesión en SAP Service Layer. Retorna session o None."""
+    if not SAP_BASE_URL or not SAP_USER:
+        return None
+    try:
+        s = _req.Session()
+        s.verify = SAP_VERIFY_SSL
+        r = s.post(f"{SAP_BASE_URL}/Login", json={
+            "CompanyDB": SAP_COMPANY_DB,
+            "UserName":  SAP_USER,
+            "Password":  SAP_PASSWORD,
+        }, timeout=15)
+        r.raise_for_status()
+        s.cookies.set("B1SESSION", r.json()["SessionId"])
+        return s
+    except Exception as e:
+        return None
+
+def sap_logout(s):
+    if s:
+        try: s.post(f"{SAP_BASE_URL}/Logout", timeout=5)
+        except: pass
+
+def sap_get_bp_code(cliente_nombre):
+    """Busca el CardCode del cliente en sap_business_partners por nombre."""
+    if not cliente_nombre:
+        return None
+    row = query("""SELECT card_code FROM sap_business_partners
+                   WHERE card_name ILIKE %s LIMIT 1""",
+                (cliente_nombre,), fetchone=True)
+    return row["card_code"] if row else None
+
+def sap_get_item_info(item_code):
+    """Obtiene info del artículo para el payload SAP."""
+    if not item_code:
+        return None
+    return query("SELECT * FROM sap_items WHERE item_code=%s",
+                 (item_code,), fetchone=True)
+
+def crear_service_call_sap(llamada: dict) -> tuple[bool, str, int | None]:
+    """
+    Crea una Service Call en SAP B1 via Service Layer.
+    Retorna (ok, mensaje, doc_entry).
+    """
+    s = sap_login()
+    if not s:
+        return False, "No se pudo conectar a SAP Service Layer", None
+
+    try:
+        # Buscar CardCode del cliente
+        card_code = sap_get_bp_code(llamada.get("cliente_nombre",""))
+
+        # Mapeo de prioridad portal → SAP
+        prio_map = {
+            "baja":    "scp_Low",
+            "media":   "scp_Medium",
+            "alta":    "scp_High",
+            "urgente": "scp_High",
+        }
+        # Mapeo de estatus portal → SAP
+        status_map = {
+            "abierta":    "scs_Open",
+            "en proceso": "scs_Open",
+            "resuelta":   "scs_Closed",
+            "cerrada":    "scs_Closed",
+        }
+
+        payload = {
+            "Subject":      f"[{llamada.get('folio','')}] {llamada.get('problema','')[:100]}",
+            "Description":  llamada.get("problema",""),
+            "Priority":     prio_map.get(llamada.get("prioridad","media"), "scp_Medium"),
+            "Status":       status_map.get(llamada.get("estatus","abierta"), "scs_Open"),
+            "CallType":     -1,  # Tipo genérico
+        }
+
+        if card_code:
+            payload["CustomerCode"] = card_code
+
+        if llamada.get("item_code"):
+            payload["ItemCode"]      = llamada["item_code"]
+            payload["ItemName"]      = llamada.get("item_nombre","")
+            payload["ManufacturerSerialNum"] = llamada.get("serial_number","")
+            payload["InternalSerialNum"]     = llamada.get("serial_number","")
+
+        if llamada.get("fecha_atencion"):
+            payload["ResponseByDate"] = llamada["fecha_atencion"]
+
+        r = s.post(f"{SAP_BASE_URL}/ServiceCalls", json=payload, timeout=20)
+
+        if r.status_code in [200, 201]:
+            doc_entry = r.json().get("ServiceCallID") or r.json().get("CallID")
+            return True, f"Service Call creada en SAP (ID: {doc_entry})", doc_entry
+        else:
+            msg = r.json().get("error",{}).get("message","Error desconocido")
+            return False, f"SAP rechazó la llamada: {msg}", None
+
+    except Exception as e:
+        return False, f"Error al conectar con SAP: {str(e)}", None
+    finally:
+        sap_logout(s)
+
+def actualizar_service_call_sap(doc_entry: int, nuevo_estatus: str, nota: str = "") -> tuple[bool, str]:
+    """Actualiza el estatus de una Service Call en SAP."""
+    if not doc_entry:
+        return False, "Sin DocEntry SAP"
+    s = sap_login()
+    if not s:
+        return False, "No se pudo conectar a SAP"
+    try:
+        status_map = {
+            "abierta":    "scs_Open",
+            "en proceso": "scs_Open",
+            "resuelta":   "scs_Closed",
+            "cerrada":    "scs_Closed",
+        }
+        payload = {"Status": status_map.get(nuevo_estatus, "scs_Open")}
+        if nota:
+            payload["Resolution"] = nota
+        r = s.patch(f"{SAP_BASE_URL}/ServiceCalls({doc_entry})", json=payload, timeout=20)
+        if r.status_code in [200, 201, 204]:
+            return True, "SAP actualizado"
+        msg = r.json().get("error",{}).get("message","Error") if r.content else "Error"
+        return False, f"SAP: {msg}"
+    except Exception as e:
+        return False, str(e)
+    finally:
+        sap_logout(s)
 
 # ── STORAGE ───────────────────────────────────────────────
 def allowed_file(f): return "." in f and f.rsplit(".",1)[1].lower() in ALLOWED_EXT
@@ -953,7 +1093,41 @@ def crear_servicio():
             VALUES (%s,%s,%s,%s,%s,%s,%s)""",
             (llamada_id,uid,"Llamada creada","","-","abierta",now))
         conn.commit(); cur.close(); conn.close()
-        flash(f"Llamada {folio} creada correctamente ✅","success")
+        # ── Intentar crear en SAP ──────────────────────
+        now_sap = datetime.now().strftime("%Y-%m-%d %H:%M")
+        llamada_dict = {
+            "folio":          folio,
+            "cliente_nombre": cliente_nombre,
+            "item_code":      item_code,
+            "item_nombre":    item_nombre,
+            "serial_number":  serial_number,
+            "problema":       problema,
+            "prioridad":      prioridad,
+            "estatus":        "abierta",
+            "fecha_atencion": fecha_atencion,
+        }
+        sap_ok, sap_msg, sap_doc = crear_service_call_sap(llamada_dict)
+        sap_status = "ok" if sap_ok else "error"
+
+        query("""UPDATE llamadas_servicio SET
+                 sap_doc_entry=%s, sap_sync_status=%s,
+                 sap_sync_msg=%s, sap_sync_fecha=%s
+                 WHERE id=%s""",
+              (sap_doc, sap_status, sap_msg, now_sap, llamada_id), commit=True)
+
+        # Log SAP en seguimiento
+        query("""INSERT INTO llamadas_seguimiento
+                 (llamada_id,usuario_id,accion,nota,estatus_anterior,estatus_nuevo,fecha)
+                 VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+              (llamada_id, uid,
+               f"SAP: {'✅ '+sap_msg if sap_ok else '❌ '+sap_msg}",
+               "", "abierta", "abierta", now_sap), commit=True)
+
+        if sap_ok:
+            flash(f"Llamada {folio} creada ✅ — SAP ID: {sap_doc}","success")
+        else:
+            flash(f"Llamada {folio} guardada en portal ⚠️ — SAP: {sap_msg}","warning")
+
     except Exception as e:
         flash(f"Error: {e}","danger")
     return redirect(url_for("servicios"))
@@ -1030,6 +1204,15 @@ def actualizar_servicio(llamada_id):
                      (llamada_id,usuario_id,accion,nota,estatus_anterior,estatus_nuevo,fecha)
                      VALUES (%s,%s,%s,%s,%s,%s,%s)""",
                   (llamada_id,uid," | ".join(cambios),nota,ls["estatus"],nuevo_estatus,now),commit=True)
+        # ── Sincronizar estatus a SAP si hay DocEntry ──
+        if ls.get("sap_doc_entry") and nuevo_estatus != ls["estatus"]:
+            sap_ok, sap_msg = actualizar_service_call_sap(ls["sap_doc_entry"], nuevo_estatus, nota)
+            now_sap = datetime.now().strftime("%Y-%m-%d %H:%M")
+            query("""UPDATE llamadas_servicio SET
+                     sap_sync_status=%s, sap_sync_msg=%s, sap_sync_fecha=%s
+                     WHERE id=%s""",
+                  ("ok" if sap_ok else "error", sap_msg, now_sap, llamada_id), commit=True)
+
         flash("Llamada actualizada ✅","success")
     except Exception as e:
         flash(f"Error: {e}","danger")
@@ -1066,6 +1249,40 @@ def seriales_item(item_code):
         "almacen": r["warehouse_code"] or "",
         "status": r["status"] or "",
     } for r in rows])
+
+
+@app.route("/servicios/<int:llamada_id>/reintentar-sap", methods=["POST"])
+def reintentar_sap(llamada_id):
+    """Reintenta enviar la llamada a SAP cuando falló inicialmente."""
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("editar","servicios"): abort(403)
+
+    ls = query("SELECT * FROM llamadas_servicio WHERE id=%s",(llamada_id,),fetchone=True)
+    if not ls: abort(404)
+
+    uid = session["user_id"]
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    sap_ok, sap_msg, sap_doc = crear_service_call_sap(dict(ls))
+    sap_status = "ok" if sap_ok else "error"
+
+    query("""UPDATE llamadas_servicio SET
+             sap_doc_entry=%s, sap_sync_status=%s,
+             sap_sync_msg=%s, sap_sync_fecha=%s WHERE id=%s""",
+          (sap_doc or ls.get("sap_doc_entry"),
+           sap_status, sap_msg, now, llamada_id), commit=True)
+
+    query("""INSERT INTO llamadas_seguimiento
+             (llamada_id,usuario_id,accion,nota,estatus_anterior,estatus_nuevo,fecha)
+             VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+          (llamada_id, uid,
+           f"Reintento SAP: {'✅ '+sap_msg if sap_ok else '❌ '+sap_msg}",
+           "", ls["estatus"], ls["estatus"], now), commit=True)
+
+    if sap_ok:
+        flash(f"✅ Enviado a SAP correctamente — ID: {sap_doc}","success")
+    else:
+        flash(f"❌ SAP rechazó: {sap_msg}","danger")
+    return redirect(url_for("detalle_servicio", llamada_id=llamada_id))
 
 # ── BÚSQUEDA DE CLIENTES (autocomplete) ───────────────────
 @app.route("/clientes/buscar")
