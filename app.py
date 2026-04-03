@@ -251,11 +251,13 @@ def crear_service_call_sap(llamada: dict) -> tuple[bool, str, int | None]:
         prio_map   = {"baja":"L","media":"M","alta":"H","urgente":"H"}
         status_map = {"abierta":-2,"en proceso":-2,"resuelta":-1,"cerrada":-1}
 
+        subject = f"[{llamada.get('folio','')}] {llamada.get('problema','')[:80]}"
         payload = {
-            "Subject":     f"[{llamada.get('folio','')}] {llamada.get('problema','')[:100]}",
+            "Subject":     subject,
             "Description": llamada.get("problema",""),
             "Priority":    prio_map.get(llamada.get("prioridad","media"), "M"),
             "Status":      status_map.get(llamada.get("estatus","abierta"), -2),
+            "Origin":      -1,   # Sin origen específico
         }
 
         if card_code:
@@ -852,13 +854,16 @@ def clientes():
     clasificacion = request.args.get("clasificacion","")
     semaforo = request.args.get("semaforo","")
 
+    tipo_cliente  = request.args.get("tipo_cliente","")  # C=Cliente, L=Lead, S=Proveedor
+
     base = """SELECT c.*,u.nombre AS vendedor_nombre, u.usuario AS vendedor_usuario,
               (SELECT COUNT(*) FROM actividades a WHERE a.cliente=c.nombre) AS total_visitas,
               (SELECT MAX(a.fecha) FROM actividades a WHERE a.cliente=c.nombre) AS ultima_visita,
               (SELECT MIN(a.proxima_visita) FROM actividades a WHERE a.cliente=c.nombre
                AND a.proxima_visita >= CURRENT_DATE::text) AS proxima_visita
               FROM clientes c LEFT JOIN usuarios u ON u.id=c.vendedor_id
-              WHERE c.activo=1"""
+              WHERE c.activo=1
+              AND (c.tipo_cliente IN ('C','L') OR c.tipo_cliente IS NULL OR c.tipo_cliente = '')"""
     params = []
 
     if not can_see_all() and rol != "supervisor":
@@ -871,6 +876,8 @@ def clientes():
         base += " AND c.clasificacion=%s"; params.append(clasificacion)
     if semaforo:
         base += " AND c.estado_semaforo=%s"; params.append(semaforo)
+    if tipo_cliente:
+        base += " AND c.tipo_cliente=%s"; params.append(tipo_cliente)
 
     # Paginación
     page     = int(request.args.get("page", 1))
@@ -879,7 +886,7 @@ def clientes():
     offset   = (page - 1) * per_page
 
     # Total count — query simple separada
-    count_base = "SELECT COUNT(*) AS total FROM clientes c WHERE c.activo=1"
+    count_base = "SELECT COUNT(*) AS total FROM clientes c WHERE c.activo=1 AND (c.tipo_cliente IN ('C','L') OR c.tipo_cliente IS NULL OR c.tipo_cliente = '')"
     count_params = []
     if not can_see_all() and rol != "supervisor":
         count_base += " AND c.vendedor_id=%s"; count_params.append(uid)
@@ -890,6 +897,8 @@ def clientes():
         count_base += " AND c.clasificacion=%s"; count_params.append(clasificacion)
     if semaforo:
         count_base += " AND c.estado_semaforo=%s"; count_params.append(semaforo)
+    if tipo_cliente:
+        count_base += " AND c.tipo_cliente=%s"; count_params.append(tipo_cliente)
     total_row = query(count_base, tuple(count_params), fetchone=True)
     total     = total_row["total"] if total_row else 0
     total_pages = max(1, -(-total // per_page))
@@ -904,6 +913,7 @@ def clientes():
                            clasificaciones=CLASIFICACIONES, industrias=INDUSTRIAS,
                            fuentes=FUENTES, semaforos=SEMAFOROS,
                            q=buscar, fil_clas=clasificacion, fil_sem=semaforo,
+                           fil_tipo=tipo_cliente,
                            page=page, per_page=per_page, total=total, total_pages=total_pages)
 
 @app.route("/clientes/crear", methods=["POST"])
@@ -1506,11 +1516,12 @@ def buscar_clientes():
     resultados = []
     param = f"%{q_clean}%"
 
-    # Buscar SOLO en tabla clientes (fuente única)
+    # Buscar en tabla clientes — solo tipo C y L (excluir proveedores S)
     sql_clientes = """SELECT id, nombre, empresa, telefono, clasificacion,
-                      estado_semaforo, fuente
+                      estado_semaforo, fuente, tipo_cliente
                       FROM clientes WHERE activo=1
-                      AND (nombre ILIKE %s OR empresa ILIKE %s)"""
+                      AND (nombre ILIKE %s OR empresa ILIKE %s)
+                      AND (tipo_cliente IN ('C','L') OR tipo_cliente IS NULL OR tipo_cliente = '')"""
     params = [param, param]
     if not can_see_all() and rol not in ["supervisor"]:
         sql_clientes += " AND (vendedor_id=%s OR vendedor_id IS NULL)"

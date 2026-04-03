@@ -35,6 +35,14 @@
         </select>
       </div>
       <div style="min-width:130px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:4px;">Tipo</label>
+        <select class="form-select form-select-sm" name="tipo_cliente">
+          <option value="">Todos</option>
+          <option value="C" {% if fil_tipo=='C' %}selected{% endif %}>🏢 Clientes</option>
+          <option value="L" {% if fil_tipo=='L' %}selected{% endif %}>🎯 Leads</option>
+        </select>
+      </div>
+      <div style="min-width:130px;">
         <label class="form-label" style="font-size:11px;margin-bottom:4px;">Semáforo</label>
         <select class="form-select form-select-sm" name="semaforo">
           <option value="">Todos</option>
@@ -101,6 +109,7 @@
           <th>Cliente</th>
           <th>Empresa</th>
           <th>Contacto</th>
+          <th>Tipo</th>
           <th>Clasificación</th>
           <th>Vendedor</th>
           <th>Visitas</th>
@@ -129,6 +138,15 @@
             {% endif %}
             {% if c.telefono %}
             <div style="font-size:12.5px;"><i class="bi bi-telephone me-1" style="color:#adb5bd;"></i>{{ c.telefono }}</div>
+            {% endif %}
+          </td>
+          <td>
+            {% if c.tipo_cliente == 'C' %}
+            <span style="background:#e6f4ea;color:#1e7e34;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:500;">🏢 Cliente</span>
+            {% elif c.tipo_cliente == 'L' %}
+            <span style="background:#e8f0fe;color:#1a56db;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:500;">🎯 Lead</span>
+            {% else %}
+            <span style="background:#f8f9fa;color:#6c757d;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:500;">—</span>
             {% endif %}
           </td>
           <td>
@@ -188,19 +206,19 @@
     </div>
     <div style="display:flex;gap:4px;">
       {% if page > 1 %}
-      <a href="?q={{ q }}&clasificacion={{ fil_clas }}&semaforo={{ fil_sem }}&per_page={{ per_page }}&page={{ page-1 }}" class="btn btn-sm btn-outline-secondary">‹</a>
+      <a href="?q={{ q }}&clasificacion={{ fil_clas }}&semaforo={{ fil_sem }}&tipo_cliente={{ fil_tipo }}&per_page={{ per_page }}&page={{ page-1 }}" class="btn btn-sm btn-outline-secondary">‹</a>
       {% endif %}
       {% for p in range(1, total_pages+1) %}
         {% if p == page %}
         <span class="btn btn-sm btn-primary" style="pointer-events:none;">{{ p }}</span>
         {% elif p <= 3 or p >= total_pages-2 or (p >= page-1 and p <= page+1) %}
-        <a href="?q={{ q }}&clasificacion={{ fil_clas }}&semaforo={{ fil_sem }}&per_page={{ per_page }}&page={{ p }}" class="btn btn-sm btn-outline-secondary">{{ p }}</a>
+        <a href="?q={{ q }}&clasificacion={{ fil_clas }}&semaforo={{ fil_sem }}&tipo_cliente={{ fil_tipo }}&per_page={{ per_page }}&page={{ p }}" class="btn btn-sm btn-outline-secondary">{{ p }}</a>
         {% elif p == 4 or p == total_pages-3 %}
         <span class="btn btn-sm btn-outline-secondary" style="pointer-events:none;">…</span>
         {% endif %}
       {% endfor %}
       {% if page < total_pages %}
-      <a href="?q={{ q }}&clasificacion={{ fil_clas }}&semaforo={{ fil_sem }}&per_page={{ per_page }}&page={{ page+1 }}" class="btn btn-sm btn-outline-secondary">›</a>
+      <a href="?q={{ q }}&clasificacion={{ fil_clas }}&semaforo={{ fil_sem }}&tipo_cliente={{ fil_tipo }}&per_page={{ per_page }}&page={{ page+1 }}" class="btn btn-sm btn-outline-secondary">›</a>
       {% endif %}
     </div>
   </div>
