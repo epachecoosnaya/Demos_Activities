@@ -117,7 +117,7 @@ def init_db():
     cur.execute("""CREATE TABLE IF NOT EXISTS clientes (
         id SERIAL PRIMARY KEY,
         nombre TEXT NOT NULL, empresa TEXT DEFAULT '', cargo TEXT DEFAULT '',
-        email TEXT DEFAULT '', telefono TEXT DEFAULT '', telefono2 DEFAULT '',
+        email TEXT DEFAULT '', telefono TEXT DEFAULT '', telefono2 TEXT DEFAULT '',
         direccion TEXT DEFAULT '', ciudad TEXT DEFAULT '', estado_dir TEXT DEFAULT '',
         pais TEXT DEFAULT 'Mexico', codigo_postal TEXT DEFAULT '',
         rfc TEXT DEFAULT '', razon_social TEXT DEFAULT '', uso_cfdi TEXT DEFAULT '',
