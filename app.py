@@ -223,17 +223,15 @@ def crear_service_call_sap(llamada: dict) -> tuple[bool, str, int | None]:
         # Buscar CardCode del cliente
         card_code = sap_get_bp_code(llamada.get("cliente_nombre",""))
 
-        # SAP B1 usa enteros: Priority: -1=Low,0=Medium,1=High
-        # Status: -2=Open,-1=Closed (según versión B1)
-        prio_map = {"baja":-1,"media":0,"alta":1,"urgente":1}
+        # SAP B1 HANA: Priority usa letras L/M/H, Status usa enteros
+        prio_map   = {"baja":"L","media":"M","alta":"H","urgente":"H"}
         status_map = {"abierta":-2,"en proceso":-2,"resuelta":-1,"cerrada":-1}
 
         payload = {
             "Subject":     f"[{llamada.get('folio','')}] {llamada.get('problema','')[:100]}",
             "Description": llamada.get("problema",""),
-            "Priority":    prio_map.get(llamada.get("prioridad","media"), 0),
+            "Priority":    prio_map.get(llamada.get("prioridad","media"), "M"),
             "Status":      status_map.get(llamada.get("estatus","abierta"), -2),
-            "CallType":    1,
         }
 
         if card_code:
@@ -272,6 +270,7 @@ def actualizar_service_call_sap(doc_entry: int, nuevo_estatus: str, nota: str = 
     try:
         status_map = {"abierta":-2,"en proceso":-2,"resuelta":-1,"cerrada":-1}
         payload = {"Status": status_map.get(nuevo_estatus, -2)}
+        # Remove empty keys
         if nota:
             payload["Resolution"] = nota
         r = s.patch(f"{SAP_BASE_URL}/ServiceCalls({doc_entry})", json=payload, timeout=20)
@@ -853,18 +852,19 @@ def clientes():
     if per_page not in [20, 50, 100]: per_page = 20
     offset   = (page - 1) * per_page
 
-    # Total count
-    count_sql = base.replace(
-        """SELECT c.*,u.nombre AS vendedor_nombre, u.usuario AS vendedor_usuario,
-              (SELECT COUNT(*) FROM actividades a WHERE a.cliente=c.nombre) AS total_visitas,
-              (SELECT MAX(a.fecha) FROM actividades a WHERE a.cliente=c.nombre) AS ultima_visita,
-              (SELECT MIN(a.proxima_visita) FROM actividades a WHERE a.cliente=c.nombre
-               AND a.proxima_visita >= CURRENT_DATE::text) AS proxima_visita
-              FROM clientes c LEFT JOIN usuarios u ON u.id=c.vendedor_id
-              WHERE c.activo=1""",
-        "SELECT COUNT(*) AS total FROM clientes c WHERE c.activo=1"
-    )
-    total_row = query(count_sql, tuple(params), fetchone=True)
+    # Total count — query simple separada
+    count_base = "SELECT COUNT(*) AS total FROM clientes c WHERE c.activo=1"
+    count_params = []
+    if not can_see_all() and rol != "supervisor":
+        count_base += " AND c.vendedor_id=%s"; count_params.append(uid)
+    if buscar:
+        count_base += " AND (c.nombre ILIKE %s OR c.empresa ILIKE %s OR c.email ILIKE %s)"
+        count_params += [f"%{buscar}%",f"%{buscar}%",f"%{buscar}%"]
+    if clasificacion:
+        count_base += " AND c.clasificacion=%s"; count_params.append(clasificacion)
+    if semaforo:
+        count_base += " AND c.estado_semaforo=%s"; count_params.append(semaforo)
+    total_row = query(count_base, tuple(count_params), fetchone=True)
     total     = total_row["total"] if total_row else 0
     total_pages = max(1, -(-total // per_page))
 

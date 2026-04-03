@@ -262,6 +262,86 @@
 
 {% block extra_js %}
 <script>
+// ── AUTOCOMPLETE CLIENTE ──
+let _searchTimer = null;
+function buscarCliente(q) {
+  clearTimeout(_searchTimer);
+  const dd = document.getElementById('cliente-dropdown');
+  const q2 = q.replace(/[*?]/g,'').trim();
+  if (!q2) { dd.style.display='none'; return; }
+  _searchTimer = setTimeout(async () => {
+    try {
+      const res = await fetch('/clientes/buscar?q=' + encodeURIComponent(q2));
+      const data = await res.json();
+      renderDropdown(data, q2);
+    } catch(e) { dd.style.display='none'; }
+  }, 220);
+}
+
+function renderDropdown(items, q) {
+  const dd = document.getElementById('cliente-dropdown');
+  if (!items.length) {
+    dd.innerHTML = '<div style="padding:12px 16px;font-size:13px;color:#adb5bd;text-align:center;"><i class="bi bi-search me-1"></i>Sin resultados — puedes escribir el nombre</div>';
+    dd.style.display = 'block'; return;
+  }
+  const colors = {verde:'#16a34a', amarillo:'#f59e0b', rojo:'#c5221f'};
+  window._clItems = items;
+  dd.innerHTML = items.map((c, i) => `
+    <div class="cl-item" onmousedown="event.preventDefault();seleccionarCliente(window._clItems[${i}].nombre,window._clItems[${i}].empresa||'',window._clItems[${i}].telefono||'',window._clItems[${i}].semaforo||'verde')">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="cl-sem" style="background:${colors[c.semaforo]||'#adb5bd'};"></div>
+        <div style="flex:1;min-width:0;">
+          <div class="cl-name">${c.nombre}</div>
+          <div class="cl-sub">${c.empresa ? c.empresa+' &middot; ' : ''}${c.clasificacion||''}</div>
+        </div>
+        <span style="font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600;background:${c.fuente==='SAP'?'#e8f0fe':'#f0e6f0'};color:${c.fuente==='SAP'?'#1a56db':'#714B67'};">${c.fuente||'CRM'}</span>
+      </div>
+    </div>`).join('');
+  dd.style.display = 'block';
+}
+
+function seleccionarCliente(nombre, empresa, telefono, semaforo) {
+  document.getElementById('cliente-input').value = nombre;
+  document.getElementById('cliente-dropdown').style.display = 'none';
+  const colors = {verde:'#16a34a', amarillo:'#f59e0b', rojo:'#c5221f'};
+  const chip = document.getElementById('cliente-seleccionado');
+  const txt  = document.getElementById('cliente-info-text');
+  txt.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${colors[semaforo]||'#adb5bd'};display:inline-block;margin-right:5px;"></span><b>${nombre}</b>${empresa?' &middot; '+empresa:''}${telefono?' &middot; '+telefono:''}`;
+  chip.style.display = 'flex';
+}
+
+function limpiarCliente() {
+  document.getElementById('cliente-input').value = '';
+  document.getElementById('cliente-seleccionado').style.display = 'none';
+  document.getElementById('cliente-dropdown').style.display = 'none';
+  document.getElementById('cliente-input').focus();
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#cliente-input') && !e.target.closest('#cliente-dropdown'))
+    document.getElementById('cliente-dropdown').style.display = 'none';
+});
+
+document.getElementById('cliente-input')?.addEventListener('keydown', e => {
+  const items = document.querySelectorAll('.cl-item');
+  const dd = document.getElementById('cliente-dropdown');
+  if (!items.length || dd.style.display === 'none') return;
+  const active = document.querySelector('.cl-item.active');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const next = active ? active.nextElementSibling : items[0];
+    if (next) { active?.classList.remove('active'); active && (active.style.background=''); next.classList.add('active'); next.style.background='#f0e6f0'; }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    const prev = active?.previousElementSibling;
+    if (prev) { active.classList.remove('active'); active.style.background=''; prev.classList.add('active'); prev.style.background='#f0e6f0'; }
+  } else if (e.key === 'Enter' && active) {
+    e.preventDefault(); active.dispatchEvent(new MouseEvent('mousedown'));
+  } else if (e.key === 'Escape') {
+    dd.style.display = 'none';
+  }
+});
+
 // ── CLASIFICAR FECHAS ──
 const HOY = new Date(); HOY.setHours(0,0,0,0);
 const EN7 = new Date(HOY); EN7.setDate(HOY.getDate()+7);
