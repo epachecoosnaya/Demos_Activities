@@ -33,7 +33,7 @@ PERMISOS_ROL = {
     "vendedor":   {"ver":True,  "crear":True,  "editar":False, "eliminar":False},
 }
 
-MODULOS = ["visitas","calendario","usuarios","reportes","configuracion","permisos"]
+MODULOS = ["visitas","calendario","clientes","usuarios","reportes","configuracion","permisos"]
 
 def get_permisos_usuario(uid, modulo):
     """Obtiene permisos de un usuario para un módulo. Admin siempre tiene todo."""
@@ -113,6 +113,20 @@ def init_db():
     cur.execute("""CREATE TABLE IF NOT EXISTS solicitudes_reset (
         id SERIAL PRIMARY KEY, usuario_id INTEGER REFERENCES usuarios(id),
         email TEXT, fecha TEXT, atendido INTEGER DEFAULT 0
+    )""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS clientes (
+        id SERIAL PRIMARY KEY,
+        nombre TEXT NOT NULL, empresa TEXT DEFAULT '', cargo TEXT DEFAULT '',
+        email TEXT DEFAULT '', telefono TEXT DEFAULT '', telefono2 DEFAULT '',
+        direccion TEXT DEFAULT '', ciudad TEXT DEFAULT '', estado_dir TEXT DEFAULT '',
+        pais TEXT DEFAULT 'Mexico', codigo_postal TEXT DEFAULT '',
+        rfc TEXT DEFAULT '', razon_social TEXT DEFAULT '', uso_cfdi TEXT DEFAULT '',
+        clasificacion TEXT DEFAULT 'prospecto', estado_semaforo TEXT DEFAULT 'verde',
+        vendedor_id INTEGER REFERENCES usuarios(id),
+        notas TEXT DEFAULT '', sitio_web TEXT DEFAULT '', industria TEXT DEFAULT '',
+        empleados TEXT DEFAULT '', fuente TEXT DEFAULT '',
+        activo INTEGER DEFAULT 1, creado_por INTEGER REFERENCES usuarios(id),
+        fecha_creacion TEXT DEFAULT '', fecha_actualizacion TEXT DEFAULT ''
     )""")
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     cur.execute("""INSERT INTO usuarios (usuario,nombre,apellido,email,password,rol,activo,fecha_creacion)
@@ -650,6 +664,178 @@ def permisos_reset(uid):
     flash("Permisos restablecidos al rol por defecto","success")
     return redirect(url_for("permisos_modulo"))
 
+
+
+# ── CLIENTES / CRM ────────────────────────────────────────
+CLASIFICACIONES = ["prospecto","cliente activo","cliente inactivo","ex-cliente","partner"]
+SEMAFOROS = {"verde":"#16a34a","amarillo":"#f59e0b","rojo":"#c5221f"}
+INDUSTRIAS = ["Tecnología","Manufactura","Comercio","Servicios","Salud","Educación",
+              "Construcción","Alimentos","Transporte","Finanzas","Otro"]
+FUENTES = ["Referido","Web","Redes sociales","Llamada en frío","Evento","Otro"]
+
+@app.route("/clientes")
+def clientes():
+    if not logged_in(): return redirect(url_for("login"))
+    uid = session["user_id"]
+    rol = session["rol"]
+    buscar = request.args.get("q","").strip()
+    clasificacion = request.args.get("clasificacion","")
+    semaforo = request.args.get("semaforo","")
+
+    base = """SELECT c.*,u.nombre AS vendedor_nombre, u.usuario AS vendedor_usuario,
+              (SELECT COUNT(*) FROM actividades a WHERE a.cliente=c.nombre) AS total_visitas,
+              (SELECT MAX(a.fecha) FROM actividades a WHERE a.cliente=c.nombre) AS ultima_visita,
+              (SELECT MIN(a.proxima_visita) FROM actividades a WHERE a.cliente=c.nombre
+               AND a.proxima_visita >= CURRENT_DATE::text) AS proxima_visita
+              FROM clientes c LEFT JOIN usuarios u ON u.id=c.vendedor_id
+              WHERE c.activo=1"""
+    params = []
+
+    if not can_see_all() and rol != "supervisor":
+        base += " AND c.vendedor_id=%s"; params.append(uid)
+
+    if buscar:
+        base += " AND (c.nombre ILIKE %s OR c.empresa ILIKE %s OR c.email ILIKE %s)"
+        params += [f"%{buscar}%",f"%{buscar}%",f"%{buscar}%"]
+    if clasificacion:
+        base += " AND c.clasificacion=%s"; params.append(clasificacion)
+    if semaforo:
+        base += " AND c.estado_semaforo=%s"; params.append(semaforo)
+
+    base += " ORDER BY c.fecha_actualizacion DESC, c.fecha_creacion DESC"
+    lista = query(base, tuple(params), fetchall=True) or []
+
+    vendedores = query("SELECT id,nombre,usuario FROM usuarios WHERE activo=1 ORDER BY nombre",fetchall=True) or []
+    return render_template("clientes.html", empresa=EMPRESA, logo=LOGO,
+                           clientes=lista, vendedores=vendedores,
+                           clasificaciones=CLASIFICACIONES, industrias=INDUSTRIAS,
+                           fuentes=FUENTES, semaforos=SEMAFOROS,
+                           q=buscar, fil_clas=clasificacion, fil_sem=semaforo)
+
+@app.route("/clientes/crear", methods=["POST"])
+def crear_cliente():
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("crear","clientes"):
+        flash("Sin permiso para crear clientes.","danger"); return redirect(url_for("clientes"))
+    uid = session["user_id"]
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    nombre = request.form.get("nombre","").strip()
+    if not nombre:
+        flash("El nombre es obligatorio.","danger"); return redirect(url_for("clientes"))
+    try:
+        query("""INSERT INTO clientes
+            (nombre,empresa,cargo,email,telefono,telefono2,direccion,ciudad,estado_dir,
+             pais,codigo_postal,rfc,razon_social,uso_cfdi,clasificacion,estado_semaforo,
+             vendedor_id,notas,sitio_web,industria,empleados,fuente,
+             activo,creado_por,fecha_creacion,fecha_actualizacion)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (nombre,
+             request.form.get("empresa","").strip(),
+             request.form.get("cargo","").strip(),
+             request.form.get("email","").strip(),
+             request.form.get("telefono","").strip(),
+             request.form.get("telefono2","").strip(),
+             request.form.get("direccion","").strip(),
+             request.form.get("ciudad","").strip(),
+             request.form.get("estado_dir","").strip(),
+             request.form.get("pais","México").strip(),
+             request.form.get("codigo_postal","").strip(),
+             request.form.get("rfc","").strip().upper(),
+             request.form.get("razon_social","").strip(),
+             request.form.get("uso_cfdi","").strip(),
+             request.form.get("clasificacion","prospecto"),
+             request.form.get("estado_semaforo","verde"),
+             request.form.get("vendedor_id") or uid,
+             request.form.get("notas","").strip(),
+             request.form.get("sitio_web","").strip(),
+             request.form.get("industria","").strip(),
+             request.form.get("empleados","").strip(),
+             request.form.get("fuente","").strip(),
+             1, uid, now, now), commit=True)
+        flash("Cliente creado correctamente ✅","success")
+    except Exception as e:
+        flash(f"Error: {e}","danger")
+    return redirect(url_for("clientes"))
+
+@app.route("/clientes/<int:cliente_id>")
+def detalle_cliente(cliente_id):
+    if not logged_in(): return redirect(url_for("login"))
+    c = query("""SELECT c.*,u.nombre AS vendedor_nombre,u.usuario AS vendedor_usuario
+                 FROM clientes c LEFT JOIN usuarios u ON u.id=c.vendedor_id
+                 WHERE c.id=%s AND c.activo=1""",(cliente_id,),fetchone=True)
+    if not c: abort(404)
+    uid = session["user_id"]
+    if not can_see_all() and c["vendedor_id"] != uid: abort(403)
+
+    # Historial de visitas relacionadas al cliente
+    visitas = query("""SELECT a.*,u.usuario AS vendedor FROM actividades a
+                       JOIN usuarios u ON u.id=a.usuario_id
+                       WHERE a.cliente ILIKE %s ORDER BY a.fecha DESC LIMIT 20""",
+                    (f"%{c['nombre']}%",), fetchall=True) or []
+
+    # Próxima visita
+    proxima = query("""SELECT a.*,u.usuario AS vendedor FROM actividades a
+                       JOIN usuarios u ON u.id=a.usuario_id
+                       WHERE a.cliente ILIKE %s AND a.proxima_visita >= CURRENT_DATE::text
+                       ORDER BY a.proxima_visita LIMIT 1""",
+                    (f"%{c['nombre']}%",), fetchone=True)
+
+    vendedores = query("SELECT id,nombre,usuario FROM usuarios WHERE activo=1 ORDER BY nombre",fetchall=True) or []
+    return render_template("cliente_detalle.html", empresa=EMPRESA, logo=LOGO,
+                           c=c, visitas=visitas, proxima=proxima,
+                           vendedores=vendedores, clasificaciones=CLASIFICACIONES,
+                           industrias=INDUSTRIAS, fuentes=FUENTES, semaforos=SEMAFOROS)
+
+@app.route("/clientes/<int:cliente_id>/editar", methods=["POST"])
+def editar_cliente(cliente_id):
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("editar","clientes"):
+        flash("Sin permiso para editar clientes.","danger")
+        return redirect(url_for("detalle_cliente", cliente_id=cliente_id))
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    try:
+        query("""UPDATE clientes SET
+            nombre=%s,empresa=%s,cargo=%s,email=%s,telefono=%s,telefono2=%s,
+            direccion=%s,ciudad=%s,estado_dir=%s,pais=%s,codigo_postal=%s,
+            rfc=%s,razon_social=%s,uso_cfdi=%s,clasificacion=%s,estado_semaforo=%s,
+            vendedor_id=%s,notas=%s,sitio_web=%s,industria=%s,empleados=%s,
+            fuente=%s,fecha_actualizacion=%s WHERE id=%s""",
+            (request.form.get("nombre","").strip(),
+             request.form.get("empresa","").strip(),
+             request.form.get("cargo","").strip(),
+             request.form.get("email","").strip(),
+             request.form.get("telefono","").strip(),
+             request.form.get("telefono2","").strip(),
+             request.form.get("direccion","").strip(),
+             request.form.get("ciudad","").strip(),
+             request.form.get("estado_dir","").strip(),
+             request.form.get("pais","México").strip(),
+             request.form.get("codigo_postal","").strip(),
+             request.form.get("rfc","").strip().upper(),
+             request.form.get("razon_social","").strip(),
+             request.form.get("uso_cfdi","").strip(),
+             request.form.get("clasificacion","prospecto"),
+             request.form.get("estado_semaforo","verde"),
+             request.form.get("vendedor_id") or session["user_id"],
+             request.form.get("notas","").strip(),
+             request.form.get("sitio_web","").strip(),
+             request.form.get("industria","").strip(),
+             request.form.get("empleados","").strip(),
+             request.form.get("fuente","").strip(),
+             now, cliente_id), commit=True)
+        flash("Cliente actualizado ✅","success")
+    except Exception as e:
+        flash(f"Error: {e}","danger")
+    return redirect(url_for("detalle_cliente", cliente_id=cliente_id))
+
+@app.route("/clientes/<int:cliente_id>/eliminar", methods=["POST"])
+def eliminar_cliente(cliente_id):
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("eliminar","clientes"):
+        flash("Sin permiso para eliminar clientes.","danger"); return redirect(url_for("clientes"))
+    query("UPDATE clientes SET activo=0 WHERE id=%s",(cliente_id,),commit=True)
+    flash("Cliente eliminado","success")
+    return redirect(url_for("clientes"))
 
 # ── ERROR HANDLERS ────────────────────────────────────────
 @app.errorhandler(403)

@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block title %}{{ c.nombre }}{% endblock %}
+{% block breadcrumb %}Clientes / {{ c.nombre }}{% endblock %}
+
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:12px;height:12px;border-radius:50%;background:{{ semaforos.get(c.estado_semaforo,'#adb5bd') }};" title="{{ c.estado_semaforo }}"></div>
+      <h1>{{ c.nombre }}</h1>
+      {% if c.clasificacion == 'prospecto' %}
+      <span style="background:#e8f0fe;color:#1a56db;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:500;">Prospecto</span>
+      {% elif c.clasificacion == 'cliente activo' %}
+      <span style="background:#e6f4ea;color:#1e7e34;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:500;">Activo</span>
+      {% elif c.clasificacion == 'cliente inactivo' %}
+      <span style="background:#f8f9fa;color:#6c757d;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:500;">Inactivo</span>
+      {% else %}
+      <span style="background:#fce8e6;color:#c5221f;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:500;">{{ c.clasificacion|capitalize }}</span>
+      {% endif %}
+    </div>
+    <p>{{ c.empresa }}{% if c.cargo %} · {{ c.cargo }}{% endif %}</p>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <a href="{{ url_for('clientes') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i> Volver
+    </a>
+    {% if get_perms('clientes').get('editar') %}
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalEditar">
+      <i class="bi bi-pencil me-1"></i> Editar
+    </button>
+    {% endif %}
+    {% if get_perms('clientes').get('eliminar') %}
+    <form method="POST" action="{{ url_for('eliminar_cliente', cliente_id=c.id) }}"
+          onsubmit="return confirm('¿Eliminar este cliente?')">
+      <button type="submit" class="btn btn-sm" style="background:#fce8e6;color:#c5221f;border:none;">
+        <i class="bi bi-trash me-1"></i> Eliminar
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3">
+
+  <!-- COLUMNA IZQUIERDA: Info + Datos fiscales -->
+  <div class="col-md-4">
+
+    <!-- CONTACTO -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-person me-1" style="color:#714B67;"></i> Contacto</div>
+      <div class="card-body" style="padding:16px;">
+        {% macro row(icon, label, val, href=None) %}
+        {% if val %}
+        <div style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-start;">
+          <i class="bi {{ icon }}" style="color:#adb5bd;font-size:14px;margin-top:1px;width:16px;"></i>
+          <div>
+            <div style="font-size:11px;color:#adb5bd;">{{ label }}</div>
+            {% if href %}
+            <a href="{{ href }}" target="_blank" style="font-size:13px;color:#714B67;">{{ val }}</a>
+            {% else %}
+            <div style="font-size:13px;">{{ val }}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+        {% endmacro %}
+        {{ row("bi-envelope","Email", c.email, "mailto:"+c.email if c.email else None) }}
+        {{ row("bi-telephone","Teléfono", c.telefono, "tel:"+c.telefono if c.telefono else None) }}
+        {{ row("bi-telephone","Teléfono 2", c.telefono2) }}
+        {{ row("bi-globe","Sitio web", c.sitio_web, c.sitio_web) }}
+        {{ row("bi-geo-alt","Dirección", (c.direccion+", " if c.direccion else "")+(c.ciudad or "")+(", "+c.estado_dir if c.estado_dir else "")) }}
+        {{ row("bi-building","Industria", c.industria) }}
+        {{ row("bi-people","Empleados", c.empleados) }}
+        {{ row("bi-funnel","Fuente", c.fuente) }}
+      </div>
+    </div>
+
+    <!-- DATOS FISCALES -->
+    {% if c.rfc or c.razon_social %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-file-text me-1" style="color:#714B67;"></i> Datos fiscales</div>
+      <div class="card-body" style="padding:16px;">
+        {% if c.rfc %}
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:#adb5bd;">RFC</div>
+          <div style="font-size:13px;font-family:monospace;font-weight:600;">{{ c.rfc }}</div>
+        </div>
+        {% endif %}
+        {% if c.razon_social %}
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:#adb5bd;">Razón social</div>
+          <div style="font-size:13px;">{{ c.razon_social }}</div>
+        </div>
+        {% endif %}
+        {% if c.uso_cfdi %}
+        <div>
+          <div style="font-size:11px;color:#adb5bd;">Uso CFDI</div>
+          <div style="font-size:13px;">{{ c.uso_cfdi }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- CRM INFO -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-bar-chart me-1" style="color:#714B67;"></i> CRM</div>
+      <div class="card-body" style="padding:16px;">
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:#adb5bd;">Vendedor asignado</div>
+          <div style="font-size:13px;font-weight:500;">{{ c.vendedor_nombre or c.vendedor_usuario or '—' }}</div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:#adb5bd;">Estado semáforo</div>
+          <div style="display:flex;align-items:center;gap:7px;margin-top:3px;">
+            <div style="width:12px;height:12px;border-radius:50%;background:{{ semaforos.get(c.estado_semaforo,'#adb5bd') }};"></div>
+            <span style="font-size:13px;font-weight:500;">{{ c.estado_semaforo|capitalize }}</span>
+          </div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:#adb5bd;">Total de visitas</div>
+          <div style="font-size:22px;font-weight:700;color:#714B67;">{{ visitas|length }}</div>
+        </div>
+        {% if c.notas %}
+        <div>
+          <div style="font-size:11px;color:#adb5bd;margin-bottom:4px;">Notas</div>
+          <div style="font-size:13px;color:#495057;line-height:1.6;background:#f8f9fb;border-radius:8px;padding:10px;">{{ c.notas }}</div>
+        </div>
+        {% endif %}
+        <div style="margin-top:10px;font-size:11px;color:#adb5bd;">
+          Creado: {{ c.fecha_creacion[:10] if c.fecha_creacion else '—' }}<br>
+          Actualizado: {{ c.fecha_actualizacion[:10] if c.fecha_actualizacion else '—' }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COLUMNA DERECHA: Actividad -->
+  <div class="col-md-8">
+
+    <!-- PRÓXIMA VISITA -->
+    {% if proxima %}
+    <div class="card mb-3" style="border-left:4px solid #16a34a;">
+      <div class="card-body" style="padding:14px 18px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <i class="bi bi-calendar2-check" style="font-size:20px;color:#16a34a;"></i>
+          <div>
+            <div style="font-size:12px;color:#6c757d;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Próxima visita agendada</div>
+            <div style="font-size:15px;font-weight:600;">{{ proxima.proxima_visita }}</div>
+            <div style="font-size:12.5px;color:#6c757d;margin-top:2px;">{{ proxima.comentarios[:80] }}{% if proxima.comentarios|length > 80 %}…{% endif %}</div>
+          </div>
+          <a href="{{ url_for('detalle_visita', actividad_id=proxima.id) }}" class="btn btn-sm btn-outline-primary ms-auto">Ver</a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- HISTORIAL VISITAS -->
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-clock-history me-1" style="color:#714B67;"></i>
+        Historial de visitas
+        <span class="ms-2" style="font-size:12px;font-weight:400;color:#6c757d;">({{ visitas|length }})</span>
+      </div>
+      {% if visitas %}
+      <div style="max-height:520px;overflow-y:auto;">
+        {% for v in visitas %}
+        <div style="padding:14px 18px;border-bottom:1px solid #f0f1f3;display:flex;gap:12px;align-items:flex-start;">
+          <div style="width:36px;height:36px;border-radius:50%;background:#f0e6f0;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="bi bi-map-fill" style="color:#714B67;font-size:14px;"></i>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+              <div>
+                <span style="font-weight:600;font-size:13.5px;">Visita registrada</span>
+                {% if v.vendedor %}
+                <span class="badge-vendedor ms-2" style="font-size:11px;">{{ v.vendedor }}</span>
+                {% endif %}
+              </div>
+              <div style="flex-shrink:0;text-align:right;">
+                <div style="font-size:12px;color:#adb5bd;">{{ v.fecha[:10] }}</div>
+                <div style="font-size:11px;color:#adb5bd;">{{ v.fecha[11:] if v.fecha|length > 10 else '' }}</div>
+              </div>
+            </div>
+            <div style="font-size:13px;color:#6c757d;margin-top:4px;line-height:1.5;">
+              {{ v.comentarios[:120] }}{% if v.comentarios|length > 120 %}…{% endif %}
+            </div>
+            {% if v.proxima_visita %}
+            <div style="font-size:12px;color:#16a34a;margin-top:4px;">
+              <i class="bi bi-calendar2-event me-1"></i>Próxima: {{ v.proxima_visita }}
+            </div>
+            {% endif %}
+          </div>
+          <a href="{{ url_for('detalle_visita', actividad_id=v.id) }}" class="btn btn-sm btn-outline-primary" style="flex-shrink:0;">
+            <i class="bi bi-eye"></i>
+          </a>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="padding:40px;text-align:center;color:#adb5bd;">
+        <i class="bi bi-map" style="font-size:32px;display:block;margin-bottom:10px;"></i>
+        Sin visitas registradas para este cliente.<br>
+        <a href="{{ url_for('visitas') }}" class="btn btn-outline-primary btn-sm mt-3">Registrar visita</a>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL EDITAR -->
+{% if get_perms('clientes').get('editar') %}
+<div class="modal fade" id="modalEditar" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2" style="color:#714B67;"></i>Editar cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="form-editar-cliente" method="POST" action="{{ url_for('editar_cliente', cliente_id=c.id) }}">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin-bottom:12px;">Información personal</div>
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Nombre <span class="text-danger">*</span></label>
+              <input class="form-control" name="nombre" value="{{ c.nombre }}" required></div>
+            <div class="col-md-6"><label class="form-label">Cargo</label>
+              <input class="form-control" name="cargo" value="{{ c.cargo or '' }}"></div>
+            <div class="col-md-6"><label class="form-label">Email</label>
+              <input class="form-control" name="email" type="email" value="{{ c.email or '' }}"></div>
+            <div class="col-md-3"><label class="form-label">Teléfono</label>
+              <input class="form-control" name="telefono" value="{{ c.telefono or '' }}"></div>
+            <div class="col-md-3"><label class="form-label">Teléfono 2</label>
+              <input class="form-control" name="telefono2" value="{{ c.telefono2 or '' }}"></div>
+          </div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin:18px 0 12px;">Empresa</div>
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Empresa</label>
+              <input class="form-control" name="empresa" value="{{ c.empresa or '' }}"></div>
+            <div class="col-md-6"><label class="form-label">Industria</label>
+              <select class="form-select" name="industria">
+                <option value="">— Seleccionar —</option>
+                {% for i in industrias %}<option value="{{ i }}" {% if c.industria==i %}selected{% endif %}>{{ i }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-4"><label class="form-label">Empleados</label>
+              <select class="form-select" name="empleados">
+                <option value="">—</option>
+                {% for op in ["1-10","11-50","51-200","201-500","500+"] %}
+                <option {% if c.empleados==op %}selected{% endif %}>{{ op }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-4"><label class="form-label">Sitio web</label>
+              <input class="form-control" name="sitio_web" value="{{ c.sitio_web or '' }}"></div>
+            <div class="col-md-4"><label class="form-label">Fuente</label>
+              <select class="form-select" name="fuente">
+                <option value="">—</option>
+                {% for f in fuentes %}<option value="{{ f }}" {% if c.fuente==f %}selected{% endif %}>{{ f }}</option>{% endfor %}
+              </select></div>
+          </div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin:18px 0 12px;">Ubicación</div>
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label">Dirección</label>
+              <input class="form-control" name="direccion" value="{{ c.direccion or '' }}"></div>
+            <div class="col-md-4"><label class="form-label">Ciudad</label>
+              <input class="form-control" name="ciudad" value="{{ c.ciudad or '' }}"></div>
+            <div class="col-md-4"><label class="form-label">Estado</label>
+              <input class="form-control" name="estado_dir" value="{{ c.estado_dir or '' }}"></div>
+            <div class="col-md-2"><label class="form-label">C.P.</label>
+              <input class="form-control" name="codigo_postal" value="{{ c.codigo_postal or '' }}"></div>
+            <div class="col-md-2"><label class="form-label">País</label>
+              <input class="form-control" name="pais" value="{{ c.pais or 'México' }}"></div>
+          </div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin:18px 0 12px;">Datos fiscales</div>
+          <div class="row g-3">
+            <div class="col-md-4"><label class="form-label">RFC</label>
+              <input class="form-control" name="rfc" value="{{ c.rfc or '' }}" style="text-transform:uppercase;"></div>
+            <div class="col-md-5"><label class="form-label">Razón social</label>
+              <input class="form-control" name="razon_social" value="{{ c.razon_social or '' }}"></div>
+            <div class="col-md-3"><label class="form-label">Uso CFDI</label>
+              <input class="form-control" name="uso_cfdi" value="{{ c.uso_cfdi or '' }}"></div>
+          </div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin:18px 0 12px;">CRM</div>
+          <div class="row g-3">
+            <div class="col-md-4"><label class="form-label">Clasificación</label>
+              <select class="form-select" name="clasificacion">
+                {% for cl in clasificaciones %}
+                <option value="{{ cl }}" {% if c.clasificacion==cl %}selected{% endif %}>{{ cl|capitalize }}</option>
+                {% endfor %}
+              </select></div>
+            <div class="col-md-4"><label class="form-label">Semáforo</label>
+              <select class="form-select" name="estado_semaforo">
+                <option value="verde" {% if c.estado_semaforo=='verde' %}selected{% endif %}>🟢 Verde</option>
+                <option value="amarillo" {% if c.estado_semaforo=='amarillo' %}selected{% endif %}>🟡 Amarillo</option>
+                <option value="rojo" {% if c.estado_semaforo=='rojo' %}selected{% endif %}>🔴 Rojo</option>
+              </select></div>
+            <div class="col-md-4"><label class="form-label">Vendedor</label>
+              <select class="form-select" name="vendedor_id">
+                {% for v in vendedores %}
+                <option value="{{ v.id }}" {% if c.vendedor_id==v.id %}selected{% endif %}>{{ v.nombre or v.usuario }}</option>
+                {% endfor %}
+              </select></div>
+            <div class="col-12"><label class="form-label">Notas</label>
+              <textarea class="form-control" name="notas" rows="3">{{ c.notas or '' }}</textarea></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" form="form-editar-cliente" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i> Guardar cambios
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
