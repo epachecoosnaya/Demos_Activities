@@ -854,52 +854,28 @@ def buscar_clientes():
     resultados = []
     param = f"%{q_clean}%"
 
-    # 1. Buscar en tabla clientes
-    sql_clientes = """SELECT id, nombre, empresa, telefono, clasificacion, estado_semaforo,
-                      'clientes' AS fuente
+    # Buscar SOLO en tabla clientes (fuente única)
+    sql_clientes = """SELECT id, nombre, empresa, telefono, clasificacion,
+                      estado_semaforo, fuente
                       FROM clientes WHERE activo=1
                       AND (nombre ILIKE %s OR empresa ILIKE %s)"""
     params = [param, param]
     if not can_see_all() and rol not in ["supervisor"]:
         sql_clientes += " AND (vendedor_id=%s OR vendedor_id IS NULL)"
         params.append(uid)
-    sql_clientes += " ORDER BY nombre LIMIT 8"
+    sql_clientes += " ORDER BY nombre LIMIT 10"
     rows = query(sql_clientes, tuple(params), fetchall=True) or []
     for r in rows:
+        fuente = r.get("fuente") or "CRM"
         resultados.append({
             "id":            r["id"],
             "nombre":        r["nombre"],
             "empresa":       r["empresa"] or "",
             "telefono":      r["telefono"] or "",
-            "clasificacion": r["clasificacion"] or "cliente",
+            "clasificacion": r["clasificacion"] or "",
             "semaforo":      r["estado_semaforo"] or "verde",
-            "fuente":        "CRM",
+            "fuente":        fuente,
         })
-
-    # 2. Buscar en tabla sap_business_partners (si existe)
-    nombres_ya = {r["nombre"].lower() for r in resultados}
-    try:
-        # Detectar columnas disponibles en sap_business_partners
-        sap_rows = query("""SELECT * FROM sap_business_partners
-                            WHERE "CardName" ILIKE %s
-                            OR "CardForeignName" ILIKE %s
-                            LIMIT 8""", (param, param), fetchall=True) or []
-        for r in sap_rows:
-            nombre = r.get("CardName") or r.get("cardname") or ""
-            if not nombre or nombre.lower() in nombres_ya:
-                continue
-            resultados.append({
-                "id":            None,
-                "nombre":        nombre,
-                "empresa":       r.get("CardForeignName") or r.get("cardforeignname") or nombre,
-                "telefono":      r.get("Phone1") or r.get("phone1") or "",
-                "clasificacion": "SAP",
-                "semaforo":      "verde",
-                "fuente":        "SAP",
-            })
-            nombres_ya.add(nombre.lower())
-    except Exception:
-        pass  # La tabla SAP puede no existir o tener otro esquema
 
     # Ordenar por nombre y limitar a 10
     resultados.sort(key=lambda x: x["nombre"].lower())
