@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}{{ cot.folio }}{% endblock %}
+{% block breadcrumb %}Cotizaciones / {{ cot.folio }}{% endblock %}
+
+{% block content %}
+{% set col_est = {"borrador":"#f8f9fa","enviada":"#e8f0fe","aceptada":"#e6f4ea","rechazada":"#fce8e6","vencida":"#fff3e0"} %}
+{% set txt_est = {"borrador":"#6c757d","enviada":"#1a56db","aceptada":"#1e7e34","rechazada":"#c5221f","vencida":"#e65100"} %}
+
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <h1 style="font-family:monospace;">{{ cot.folio }}</h1>
+      <span style="background:{{ col_est.get(cot.estatus,'#f8f9fa') }};color:{{ txt_est.get(cot.estatus,'#6c757d') }};border-radius:20px;padding:4px 14px;font-size:12px;font-weight:500;">
+        {{ cot.estatus|capitalize }}
+      </span>
+    </div>
+    <p>{{ cot.cliente_nombre }} · Creada {{ cot.fecha_creacion[:10] if cot.fecha_creacion else '—' }} por {{ cot.creador_nombre or '—' }}</p>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="{{ url_for('cotizaciones') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Volver</a>
+    <a href="{{ url_for('cotizacion_pdf', cotizacion_id=cot.id) }}" target="_blank" class="btn btn-sm btn-outline-danger">
+      <i class="bi bi-file-pdf me-1"></i>Ver PDF
+    </a>
+    <button onclick="window.open('{{ url_for('cotizacion_pdf', cotizacion_id=cot.id) }}','_blank')" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-share me-1"></i>Compartir
+    </button>
+    <form method="POST" action="{{ url_for('duplicar_cotizacion', cotizacion_id=cot.id) }}" style="display:inline;">
+      <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-copy me-1"></i>Duplicar</button>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- INFO LATERAL -->
+  <div class="col-md-3">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-info-circle me-1" style="color:#714B67;"></i>Detalles</div>
+      <div class="card-body" style="padding:16px;">
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;color:#adb5bd;">Cliente</div>
+          <div style="font-weight:600;font-size:13.5px;">{{ cot.cliente_nombre or '—' }}</div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;color:#adb5bd;">Válida hasta</div>
+          <div style="font-size:13px;{% if cot.fecha_vencimiento and cot.fecha_vencimiento < now()[:10] %}color:#c5221f;font-weight:600;{% endif %}">
+            {{ cot.fecha_vencimiento or '—' }}
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;color:#adb5bd;">Moneda</div>
+          <div style="font-size:13px;">{{ cot.moneda or 'MXN' }}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#adb5bd;">Última actualización</div>
+          <div style="font-size:12px;color:#6c757d;">{{ cot.fecha_actualizacion[:16] if cot.fecha_actualizacion else '—' }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cambiar estatus -->
+    {% if get_perms('cotizaciones').get('editar') %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-pencil me-1" style="color:#714B67;"></i>Cambiar estatus</div>
+      <div class="card-body" style="padding:14px;">
+        <form method="POST" action="{{ url_for('actualizar_estatus_cotizacion', cotizacion_id=cot.id) }}">
+          <select class="form-select form-select-sm mb-2" name="estatus">
+            {% for e in estatus_cot %}
+            <option value="{{ e }}" {% if cot.estatus==e %}selected{% endif %}>{{ e|capitalize }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-primary btn-sm w-100">Guardar</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Totales -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-calculator me-1" style="color:#714B67;"></i>Resumen</div>
+      <div class="card-body" style="padding:14px 16px;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+          <span style="color:#6c757d;">Subtotal</span>
+          <span>$ {{ "%.2f"|format(cot.subtotal or 0) }}</span>
+        </div>
+        {% if cot.descuento_monto and cot.descuento_monto > 0 %}
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+          <span style="color:#6c757d;">Descuento ({{ cot.descuento_global }}%)</span>
+          <span style="color:#c5221f;">-$ {{ "%.2f"|format(cot.descuento_monto) }}</span>
+        </div>
+        {% endif %}
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;">
+          <span style="color:#6c757d;">IVA 16%</span>
+          <span>$ {{ "%.2f"|format(cot.impuesto or 0) }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;border-top:2px solid #714B67;padding-top:10px;color:#714B67;">
+          <span>TOTAL</span>
+          <span>$ {{ "%.2f"|format(cot.total or 0) }}</span>
+        </div>
+        <div style="font-size:11px;color:#adb5bd;margin-top:6px;text-align:right;">{{ cot.moneda or 'MXN' }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLA DE ARTÍCULOS -->
+  <div class="col-md-9">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-box me-1" style="color:#714B67;"></i>Artículos</div>
+      <div class="table-responsive">
+        <table class="table" style="font-size:13px;">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Descripción</th>
+              <th>UM</th>
+              <th style="text-align:right;">Cantidad</th>
+              <th style="text-align:right;">Precio unit.</th>
+              <th style="text-align:right;">Desc %</th>
+              <th style="text-align:right;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in items %}
+            <tr>
+              <td style="font-family:monospace;font-size:12px;color:#714B67;font-weight:600;">{{ it.item_code or '—' }}</td>
+              <td>{{ it.item_nombre }}</td>
+              <td style="color:#6c757d;">{{ it.uom or '—' }}</td>
+              <td style="text-align:right;">{{ it.cantidad }}</td>
+              <td style="text-align:right;">$ {{ "%.2f"|format(it.precio_unitario or 0) }}</td>
+              <td style="text-align:right;">{% if it.descuento %}{{ it.descuento }}%{% else %}—{% endif %}</td>
+              <td style="text-align:right;font-weight:600;">$ {{ "%.2f"|format(it.subtotal or 0) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- NOTAS Y CONDICIONES -->
+    {% if cot.notas or cot.condiciones %}
+    <div class="card">
+      <div class="card-body" style="padding:16px;">
+        <div class="row g-3">
+          {% if cot.notas %}
+          <div class="col-md-6">
+            <div style="font-size:11px;color:#adb5bd;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Notas</div>
+            <div style="font-size:13px;line-height:1.6;color:#495057;white-space:pre-line;">{{ cot.notas }}</div>
+          </div>
+          {% endif %}
+          {% if cot.condiciones %}
+          <div class="col-md-6">
+            <div style="font-size:11px;color:#adb5bd;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Condiciones</div>
+            <div style="font-size:13px;line-height:1.6;color:#495057;white-space:pre-line;">{{ cot.condiciones }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

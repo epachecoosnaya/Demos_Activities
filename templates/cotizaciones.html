@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+{% block title %}Cotizaciones{% endblock %}
+{% block breadcrumb %}Cotizaciones{% endblock %}
+
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <h1>Cotizaciones</h1>
+    <p>{{ cotizaciones|length }} registros</p>
+  </div>
+  {% if get_perms('cotizaciones').get('crear') %}
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevaCot">
+    <i class="bi bi-plus-lg me-1"></i> Nueva cotización
+  </button>
+  {% endif %}
+</div>
+
+<!-- STATS -->
+<div class="row g-2 mb-3">
+  {% set borradores = cotizaciones|selectattr('estatus','eq','borrador')|list|length %}
+  {% set enviadas   = cotizaciones|selectattr('estatus','eq','enviada')|list|length %}
+  {% set aceptadas  = cotizaciones|selectattr('estatus','eq','aceptada')|list|length %}
+  {% set rechazadas = cotizaciones|selectattr('estatus','eq','rechazada')|list|length %}
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#f8f9fa;"><i class="bi bi-file-earmark-text" style="color:#6c757d;"></i></div>
+      <div><div class="stat-val">{{ borradores }}</div><div class="stat-lbl">Borradores</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#e8f0fe;"><i class="bi bi-send-fill" style="color:#1a56db;"></i></div>
+      <div><div class="stat-val">{{ enviadas }}</div><div class="stat-lbl">Enviadas</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#e6f4ea;"><i class="bi bi-check-circle-fill" style="color:#1e7e34;"></i></div>
+      <div><div class="stat-val">{{ aceptadas }}</div><div class="stat-lbl">Aceptadas</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#fce8e6;"><i class="bi bi-x-circle-fill" style="color:#c5221f;"></i></div>
+      <div><div class="stat-val">{{ rechazadas }}</div><div class="stat-lbl">Rechazadas</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- FILTROS -->
+<div class="card mb-3">
+  <div class="card-body" style="padding:12px 16px;">
+    <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div style="flex:1;min-width:160px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Buscar</label>
+        <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Folio o cliente...">
+      </div>
+      <div style="min-width:140px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Estatus</label>
+        <select class="form-select form-select-sm" name="estatus">
+          <option value="">Todos</option>
+          {% for e in estatus_cot %}<option value="{{ e }}" {% if fil_est==e %}selected{% endif %}>{{ e|capitalize }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+        <a href="{{ url_for('cotizaciones') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- TABLA -->
+<div class="card">
+  <div class="card-header"><i class="bi bi-file-earmark-text me-1" style="color:#714B67;"></i> Listado de cotizaciones</div>
+  {% if cotizaciones %}
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Folio</th>
+          <th>Cliente</th>
+          <th>Estatus</th>
+          <th style="text-align:right;">Subtotal</th>
+          <th style="text-align:right;">Total</th>
+          <th>Vence</th>
+          <th>Creada</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set col_est = {"borrador":"#f8f9fa","enviada":"#e8f0fe","aceptada":"#e6f4ea","rechazada":"#fce8e6","vencida":"#fff3e0"} %}
+        {% set txt_est = {"borrador":"#6c757d","enviada":"#1a56db","aceptada":"#1e7e34","rechazada":"#c5221f","vencida":"#e65100"} %}
+        {% for c in cotizaciones %}
+        <tr>
+          <td style="font-family:monospace;font-weight:600;color:#714B67;">{{ c.folio }}</td>
+          <td style="font-size:13px;font-weight:500;">{{ c.cliente_nombre or '—' }}</td>
+          <td>
+            <span style="background:{{ col_est.get(c.estatus,'#f8f9fa') }};color:{{ txt_est.get(c.estatus,'#6c757d') }};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;">
+              {{ c.estatus|capitalize }}
+            </span>
+          </td>
+          <td style="text-align:right;font-size:13px;">$ {{ "%.2f"|format(c.subtotal or 0) }}</td>
+          <td style="text-align:right;font-size:13.5px;font-weight:600;">$ {{ "%.2f"|format(c.total or 0) }}</td>
+          <td style="font-size:12px;{% if c.fecha_vencimiento and c.fecha_vencimiento < now()[:10] and c.estatus not in ['aceptada','rechazada'] %}color:#c5221f;font-weight:600;{% else %}color:#6c757d;{% endif %}">
+            {{ c.fecha_vencimiento or '—' }}
+          </td>
+          <td style="font-size:12px;color:#adb5bd;">{{ c.fecha_creacion[:10] if c.fecha_creacion else '—' }}</td>
+          <td>
+            <div style="display:flex;gap:4px;">
+              <a href="{{ url_for('detalle_cotizacion', cotizacion_id=c.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+              <a href="{{ url_for('cotizacion_pdf', cotizacion_id=c.id) }}" target="_blank" class="btn btn-sm btn-outline-secondary" title="Ver PDF"><i class="bi bi-file-pdf"></i></a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:50px;text-align:center;color:#adb5bd;">
+    <i class="bi bi-file-earmark-text" style="font-size:40px;display:block;margin-bottom:12px;"></i>
+    No hay cotizaciones aún.
+    {% if get_perms('cotizaciones').get('crear') %}
+    <br><button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalNuevaCot">
+      <i class="bi bi-plus-lg me-1"></i> Crear primera cotización
+    </button>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- MODAL NUEVA COTIZACIÓN -->
+{% if get_perms('cotizaciones').get('crear') %}
+<div class="modal fade" id="modalNuevaCot" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-file-earmark-plus me-2" style="color:#714B67;"></i>Nueva cotización</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="form-nueva-cot" method="POST" action="{{ url_for('crear_cotizacion') }}">
+          <input type="hidden" name="items_json" id="items_json_input">
+
+          <!-- CLIENTE -->
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin-bottom:10px;">Cliente</div>
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <label class="form-label">Cliente <span class="text-danger">*</span></label>
+              <div style="position:relative;">
+                <input class="form-control" id="cot-cli-input" placeholder="Buscar cliente..." autocomplete="off" oninput="buscarCliCot(this.value)">
+                <div id="cot-cli-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1px solid #dee2e6;border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,0.15);max-height:220px;overflow-y:auto;"></div>
+              </div>
+              <input type="hidden" id="cot-cli-id" name="cliente_id">
+              <input type="hidden" id="cot-cli-nombre" name="cliente_nombre">
+              <div id="cot-cli-chip" style="display:none;margin-top:6px;padding:7px 12px;background:#f0e6f0;border-radius:7px;font-size:12.5px;display:flex;align-items:center;gap:8px;">
+                <i class="bi bi-person-check-fill" style="color:#714B67;"></i>
+                <span id="cot-cli-chip-text"></span>
+                <button type="button" onclick="limpiarCliCot()" style="margin-left:auto;background:none;border:none;color:#adb5bd;cursor:pointer;font-size:16px;">×</button>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Validez (días)</label>
+              <input class="form-control" name="validez_dias" type="number" value="15" min="1" max="365">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Descuento global %</label>
+              <input class="form-control" name="descuento_global" id="desc-global" type="number" value="0" min="0" max="100" step="0.01" oninput="recalcularTotales()">
+            </div>
+          </div>
+
+          <!-- ARTÍCULOS -->
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin-bottom:10px;">
+            Artículos
+          </div>
+          <!-- Buscador de artículos -->
+          <div style="position:relative;margin-bottom:12px;">
+            <input class="form-control" id="cot-item-input" placeholder="Buscar artículo por código o nombre..." autocomplete="off" oninput="buscarItemCot(this.value)">
+            <div id="cot-item-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1px solid #dee2e6;border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,0.15);max-height:260px;overflow-y:auto;"></div>
+          </div>
+
+          <!-- Tabla de items agregados -->
+          <div class="table-responsive">
+            <table class="table" id="tabla-items" style="font-size:13px;">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Descripción</th>
+                  <th>UM</th>
+                  <th style="width:90px;">Cant.</th>
+                  <th style="width:120px;">Precio</th>
+                  <th style="width:90px;">Desc %</th>
+                  <th style="width:110px;text-align:right;">Subtotal</th>
+                  <th style="width:40px;"></th>
+                </tr>
+              </thead>
+              <tbody id="items-tbody">
+                <tr id="row-vacio">
+                  <td colspan="8" style="text-align:center;color:#adb5bd;padding:20px;font-size:13px;">
+                    <i class="bi bi-box me-1"></i>Busca y agrega artículos arriba
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr style="border-top:2px solid #e2e5e9;">
+                  <td colspan="6" style="text-align:right;font-size:13px;color:#6c757d;padding-right:12px;">Subtotal:</td>
+                  <td style="text-align:right;font-weight:600;" id="tot-subtotal">$ 0.00</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td colspan="6" style="text-align:right;font-size:13px;color:#6c757d;padding-right:12px;">Descuento:</td>
+                  <td style="text-align:right;color:#c5221f;" id="tot-desc">$ 0.00</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td colspan="6" style="text-align:right;font-size:13px;color:#6c757d;padding-right:12px;">IVA 16%:</td>
+                  <td style="text-align:right;" id="tot-iva">$ 0.00</td>
+                  <td></td>
+                </tr>
+                <tr style="border-top:2px solid #714B67;">
+                  <td colspan="6" style="text-align:right;font-weight:700;font-size:15px;padding-right:12px;">TOTAL:</td>
+                  <td style="text-align:right;font-weight:700;font-size:15px;color:#714B67;" id="tot-total">$ 0.00</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- NOTAS Y CONDICIONES -->
+          <div class="row g-3 mt-1">
+            <div class="col-md-6">
+              <label class="form-label">Notas para el cliente</label>
+              <textarea class="form-control" name="notas" rows="3" placeholder="Notas adicionales, detalles de entrega, etc."></textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Condiciones de venta</label>
+              <textarea class="form-control" name="condiciones" rows="3" placeholder="Ej: Pago a 30 días, instalación incluida..."></textarea>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="guardarCotizacion()">
+          <i class="bi bi-check-lg me-1"></i> Crear cotización
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Estado de items ──
+let cotItems = [];
+
+// ── AUTOCOMPLETE CLIENTE ──
+let _cliTimer = null;
+function buscarCliCot(q) {
+  clearTimeout(_cliTimer);
+  const dd = document.getElementById('cot-cli-dd');
+  if (!q) { dd.style.display='none'; return; }
+  _cliTimer = setTimeout(async () => {
+    const res = await fetch('/clientes/buscar?q='+encodeURIComponent(q));
+    const data = await res.json();
+    window._cotCliItems = data;
+    if (!data.length) {
+      dd.innerHTML='<div style="padding:12px;color:#adb5bd;font-size:13px;text-align:center;">Sin resultados</div>';
+      dd.style.display='block'; return;
+    }
+    dd.innerHTML = data.map((c,i) => `
+      <div style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f1f3;"
+           onmouseover="this.style.background='#f8f9fb'" onmouseout="this.style.background=''"
+           onmousedown="event.preventDefault();selCliCot(window._cotCliItems[${i}].id,window._cotCliItems[${i}].nombre,window._cotCliItems[${i}].empresa||'')">
+        <b style="font-size:13px;">${c.nombre}</b><br>
+        <span style="font-size:11.5px;color:#6c757d;">${c.empresa||''}</span>
+      </div>`).join('');
+    dd.style.display='block';
+  }, 200);
+}
+function selCliCot(id, nombre, empresa) {
+  document.getElementById('cot-cli-id').value = id||'';
+  document.getElementById('cot-cli-nombre').value = nombre;
+  document.getElementById('cot-cli-input').value = nombre;
+  document.getElementById('cot-cli-dd').style.display='none';
+  document.getElementById('cot-cli-chip-text').textContent = nombre+(empresa?' · '+empresa:'');
+  document.getElementById('cot-cli-chip').style.display='flex';
+}
+function limpiarCliCot() {
+  ['cot-cli-id','cot-cli-nombre','cot-cli-input'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cot-cli-chip').style.display='none';
+}
+
+// ── AUTOCOMPLETE ARTÍCULO ──
+let _itemTimer = null;
+function buscarItemCot(q) {
+  clearTimeout(_itemTimer);
+  const dd = document.getElementById('cot-item-dd');
+  if (!q) { dd.style.display='none'; return; }
+  _itemTimer = setTimeout(async () => {
+    const res = await fetch('/servicios/buscar-items?q='+encodeURIComponent(q));
+    const data = await res.json();
+    window._cotItemList = data;
+    if (!data.length) {
+      dd.innerHTML='<div style="padding:12px;color:#adb5bd;font-size:13px;text-align:center;">Sin artículos</div>';
+      dd.style.display='block'; return;
+    }
+    dd.innerHTML = data.map((it,i) => `
+      <div style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f1f3;"
+           onmouseover="this.style.background='#f8f9fb'" onmouseout="this.style.background=''"
+           onmousedown="event.preventDefault();agregarItem(window._cotItemList[${i}])">
+        <div style="font-family:monospace;font-size:12px;color:#714B67;font-weight:600;">${it.item_code}</div>
+        <div style="font-size:13px;">${it.item_name}</div>
+        <div style="font-size:11.5px;color:#6c757d;">${it.item_group||''} · ${it.uom||''} · <b>$ ${it.price.toFixed(2)}</b></div>
+      </div>`).join('');
+    dd.style.display='block';
+  }, 200);
+}
+
+function agregarItem(it) {
+  document.getElementById('cot-item-input').value='';
+  document.getElementById('cot-item-dd').style.display='none';
+  // Verificar si ya existe
+  const existente = cotItems.find(i => i.item_code === it.item_code);
+  if (existente) { existente.cantidad += 1; renderItems(); return; }
+  cotItems.push({
+    item_code: it.item_code,
+    item_nombre: it.item_name,
+    uom: it.uom||'',
+    cantidad: 1,
+    precio_unitario: it.price||0,
+    descuento: 0,
+  });
+  renderItems();
+}
+
+function renderItems() {
+  const tbody = document.getElementById('items-tbody');
+  document.getElementById('row-vacio').style.display = cotItems.length ? 'none' : '';
+  // Remove old rows except empty row
+  tbody.querySelectorAll('tr.item-row').forEach(r => r.remove());
+  cotItems.forEach((it, i) => {
+    const sub = it.cantidad * it.precio_unitario * (1 - it.descuento/100);
+    const tr = document.createElement('tr');
+    tr.className = 'item-row';
+    tr.innerHTML = `
+      <td style="font-family:monospace;font-size:12px;color:#714B67;">${it.item_code}</td>
+      <td style="font-size:13px;">${it.item_nombre}</td>
+      <td style="font-size:12px;color:#6c757d;">${it.uom}</td>
+      <td><input type="number" class="form-control form-control-sm" value="${it.cantidad}" min="0.001" step="any"
+          oninput="cotItems[${i}].cantidad=parseFloat(this.value)||0;renderItems();" style="width:80px;"></td>
+      <td><input type="number" class="form-control form-control-sm" value="${it.precio_unitario}" min="0" step="0.01"
+          oninput="cotItems[${i}].precio_unitario=parseFloat(this.value)||0;renderItems();" style="width:110px;"></td>
+      <td><input type="number" class="form-control form-control-sm" value="${it.descuento}" min="0" max="100" step="0.01"
+          oninput="cotItems[${i}].descuento=parseFloat(this.value)||0;renderItems();" style="width:80px;"></td>
+      <td style="text-align:right;font-weight:600;">$ ${sub.toFixed(2)}</td>
+      <td><button type="button" class="btn btn-sm" style="background:#fce8e6;color:#c5221f;border:none;"
+          onclick="cotItems.splice(${i},1);renderItems();"><i class="bi bi-trash"></i></button></td>`;
+    tbody.appendChild(tr);
+  });
+  recalcularTotales();
+}
+
+function recalcularTotales() {
+  const descGlobal = parseFloat(document.getElementById('desc-global').value)||0;
+  const subtotal   = cotItems.reduce((s,it) => s + it.cantidad*it.precio_unitario*(1-it.descuento/100), 0);
+  const descMonto  = subtotal * (descGlobal/100);
+  const base       = subtotal - descMonto;
+  const iva        = base * 0.16;
+  const total      = base + iva;
+  document.getElementById('tot-subtotal').textContent = '$ '+subtotal.toFixed(2);
+  document.getElementById('tot-desc').textContent     = descMonto > 0 ? '-$ '+descMonto.toFixed(2) : '$ 0.00';
+  document.getElementById('tot-iva').textContent      = '$ '+iva.toFixed(2);
+  document.getElementById('tot-total').textContent    = '$ '+total.toFixed(2);
+}
+
+function guardarCotizacion() {
+  const nombre = document.getElementById('cot-cli-nombre').value;
+  if (!nombre) { alert('Selecciona un cliente'); return; }
+  if (!cotItems.length) { alert('Agrega al menos un artículo'); return; }
+  document.getElementById('items_json_input').value = JSON.stringify(cotItems);
+  document.getElementById('form-nueva-cot').submit();
+}
+
+// Cerrar dropdowns
+document.addEventListener('click', e => {
+  if (!e.target.closest('#cot-cli-input') && !e.target.closest('#cot-cli-dd'))
+    document.getElementById('cot-cli-dd').style.display='none';
+  if (!e.target.closest('#cot-item-input') && !e.target.closest('#cot-item-dd'))
+    document.getElementById('cot-item-dd').style.display='none';
+});
+</script>
+{% endblock %}

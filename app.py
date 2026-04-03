@@ -40,7 +40,7 @@ PERMISOS_ROL = {
     "vendedor":   {"ver":True,  "crear":True,  "editar":False, "eliminar":False},
 }
 
-MODULOS = ["visitas","calendario","clientes","servicios","usuarios","reportes","configuracion","permisos"]
+MODULOS = ["visitas","calendario","clientes","servicios","cotizaciones","usuarios","reportes","configuracion","permisos"]
 
 def get_permisos_usuario(uid, modulo):
     """Obtiene permisos de un usuario para un módulo. Admin siempre tiene todo."""
@@ -142,6 +142,30 @@ def init_db():
     cur.execute("""INSERT INTO usuarios (usuario,nombre,apellido,email,password,rol,activo,fecha_creacion)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (usuario) DO NOTHING""",
         ("demo","Demo","Vendedor","demo@demo.com",generate_password_hash("1234"),"vendedor",1,now))
+    cur.execute("""CREATE TABLE IF NOT EXISTS cotizaciones (
+        id SERIAL PRIMARY KEY, folio TEXT UNIQUE,
+        cliente_id INTEGER REFERENCES clientes(id),
+        cliente_nombre TEXT DEFAULT '', estatus TEXT DEFAULT 'borrador',
+        validez_dias INTEGER DEFAULT 15, moneda TEXT DEFAULT 'MXN',
+        descuento_global NUMERIC(5,2) DEFAULT 0,
+        subtotal NUMERIC(18,2) DEFAULT 0,
+        descuento_monto NUMERIC(18,2) DEFAULT 0,
+        impuesto NUMERIC(18,2) DEFAULT 0,
+        total NUMERIC(18,2) DEFAULT 0,
+        notas TEXT DEFAULT '', condiciones TEXT DEFAULT '',
+        creado_por INTEGER REFERENCES usuarios(id),
+        fecha_creacion TEXT DEFAULT '', fecha_actualizacion TEXT DEFAULT '',
+        fecha_vencimiento TEXT DEFAULT ''
+    )""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS cotizaciones_items (
+        id SERIAL PRIMARY KEY,
+        cotizacion_id INTEGER REFERENCES cotizaciones(id) ON DELETE CASCADE,
+        item_code TEXT, item_nombre TEXT, uom TEXT DEFAULT '',
+        cantidad NUMERIC(18,3) DEFAULT 1,
+        precio_unitario NUMERIC(18,2) DEFAULT 0,
+        descuento NUMERIC(5,2) DEFAULT 0,
+        subtotal NUMERIC(18,2) DEFAULT 0
+    )""")
     cur.execute("""CREATE TABLE IF NOT EXISTS llamadas_servicio (
         id SERIAL PRIMARY KEY, folio TEXT UNIQUE,
         cliente_id INTEGER REFERENCES clientes(id),
@@ -238,10 +262,12 @@ def crear_service_call_sap(llamada: dict) -> tuple[bool, str, int | None]:
             payload["CustomerCode"] = card_code
 
         if llamada.get("item_code"):
-            payload["ItemCode"]      = llamada["item_code"]
-            payload["ItemName"]      = llamada.get("item_nombre","")
-            payload["ManufacturerSerialNum"] = llamada.get("serial_number","")
-            payload["InternalSerialNum"]     = llamada.get("serial_number","")
+            payload["ItemCode"] = llamada["item_code"]
+            # Solo serial si existe y no está vacío
+            serial = (llamada.get("serial_number") or "").strip()
+            if serial:
+                payload["ManufacturerSerialNum"] = serial
+                payload["InternalSerialNum"]     = serial
 
         if llamada.get("fecha_atencion"):
             payload["ResponseByDate"] = llamada["fecha_atencion"]
@@ -1006,6 +1032,178 @@ def eliminar_cliente(cliente_id):
     return redirect(url_for("clientes"))
 
 
+
+
+# ── COTIZACIONES ──────────────────────────────────────────
+ESTATUS_COT = ["borrador","enviada","aceptada","rechazada","vencida"]
+IVA = 0.16
+
+def gen_folio_cot():
+    count = query("SELECT COUNT(*) AS c FROM cotizaciones", fetchone=True)["c"]
+    return f"COT-{(count+1):04d}"
+
+def calcular_totales(items, descuento_global=0):
+    subtotal = sum(
+        float(i.get("cantidad",1)) * float(i.get("precio_unitario",0)) *
+        (1 - float(i.get("descuento",0))/100)
+        for i in items
+    )
+    desc_monto = subtotal * (float(descuento_global)/100)
+    base       = subtotal - desc_monto
+    impuesto   = round(base * IVA, 2)
+    total      = round(base + impuesto, 2)
+    return round(subtotal,2), round(desc_monto,2), impuesto, total
+
+@app.route("/cotizaciones")
+def cotizaciones():
+    if not logged_in(): return redirect(url_for("login"))
+    uid = session["user_id"]
+    rol = session["rol"]
+    q   = request.args.get("q","").strip()
+    fil_est = request.args.get("estatus","")
+
+    base = """SELECT c.*,u.nombre AS creador_nombre
+              FROM cotizaciones c LEFT JOIN usuarios u ON u.id=c.creado_por
+              WHERE 1=1"""
+    params = []
+    if not can_see_all() and rol != "supervisor":
+        base += " AND c.creado_por=%s"; params.append(uid)
+    if q:
+        base += " AND (c.folio ILIKE %s OR c.cliente_nombre ILIKE %s)"
+        params += [f"%{q}%", f"%{q}%"]
+    if fil_est:
+        base += " AND c.estatus=%s"; params.append(fil_est)
+    base += " ORDER BY c.fecha_creacion DESC"
+    lista = query(base, tuple(params), fetchall=True) or []
+
+    return render_template("cotizaciones.html", empresa=EMPRESA, logo=LOGO,
+                           cotizaciones=lista, estatus_cot=ESTATUS_COT,
+                           q=q, fil_est=fil_est)
+
+@app.route("/cotizaciones/crear", methods=["POST"])
+def crear_cotizacion():
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("crear","cotizaciones"):
+        flash("Sin permiso.","danger"); return redirect(url_for("cotizaciones"))
+    uid  = session["user_id"]
+    now  = datetime.now().strftime("%Y-%m-%d %H:%M")
+    from datetime import timedelta
+    valida = (datetime.now() + timedelta(days=15)).strftime("%Y-%m-%d")
+
+    cliente_id     = request.form.get("cliente_id") or None
+    cliente_nombre = request.form.get("cliente_nombre","").strip()
+    notas          = request.form.get("notas","").strip()
+    condiciones    = request.form.get("condiciones","").strip()
+    descuento_gbl  = float(request.form.get("descuento_global","0") or 0)
+    validez        = int(request.form.get("validez_dias","15") or 15)
+
+    # Items enviados como JSON
+    import json as _json
+    items_raw = request.form.get("items_json","[]")
+    try: items = _json.loads(items_raw)
+    except: items = []
+
+    subtotal, desc_monto, impuesto, total = calcular_totales(items, descuento_gbl)
+    folio = gen_folio_cot()
+
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("""INSERT INTO cotizaciones
+            (folio,cliente_id,cliente_nombre,estatus,validez_dias,moneda,
+             descuento_global,subtotal,descuento_monto,impuesto,total,
+             notas,condiciones,creado_por,fecha_creacion,fecha_actualizacion,fecha_vencimiento)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (folio,cliente_id,cliente_nombre,"borrador",validez,"MXN",
+             descuento_gbl,subtotal,desc_monto,impuesto,total,
+             notas,condiciones,uid,now,now,valida))
+        cot_id = cur.fetchone()["id"]
+        for it in items:
+            cant  = float(it.get("cantidad",1))
+            precio= float(it.get("precio_unitario",0))
+            desc  = float(it.get("descuento",0))
+            sub   = round(cant * precio * (1 - desc/100), 2)
+            cur.execute("""INSERT INTO cotizaciones_items
+                (cotizacion_id,item_code,item_nombre,uom,cantidad,precio_unitario,descuento,subtotal)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (cot_id,it.get("item_code",""),it.get("item_nombre",""),
+                 it.get("uom",""),cant,precio,desc,sub))
+        conn.commit(); cur.close(); conn.close()
+        flash(f"Cotización {folio} creada ✅","success")
+        return redirect(url_for("detalle_cotizacion", cotizacion_id=cot_id))
+    except Exception as e:
+        flash(f"Error: {e}","danger")
+        return redirect(url_for("cotizaciones"))
+
+@app.route("/cotizaciones/<int:cotizacion_id>")
+def detalle_cotizacion(cotizacion_id):
+    if not logged_in(): return redirect(url_for("login"))
+    cot = query("""SELECT c.*,u.nombre AS creador_nombre
+                   FROM cotizaciones c LEFT JOIN usuarios u ON u.id=c.creado_por
+                   WHERE c.id=%s""",(cotizacion_id,),fetchone=True)
+    if not cot: abort(404)
+    items = query("SELECT * FROM cotizaciones_items WHERE cotizacion_id=%s ORDER BY id",
+                  (cotizacion_id,),fetchall=True) or []
+    return render_template("cotizacion_detalle.html", empresa=EMPRESA, logo=LOGO,
+                           cot=cot, items=items, estatus_cot=ESTATUS_COT, IVA=IVA)
+
+@app.route("/cotizaciones/<int:cotizacion_id>/actualizar-estatus", methods=["POST"])
+def actualizar_estatus_cotizacion(cotizacion_id):
+    if not logged_in(): return redirect(url_for("login"))
+    nuevo = request.form.get("estatus","borrador")
+    now   = datetime.now().strftime("%Y-%m-%d %H:%M")
+    query("UPDATE cotizaciones SET estatus=%s,fecha_actualizacion=%s WHERE id=%s",
+          (nuevo,now,cotizacion_id),commit=True)
+    flash("Estatus actualizado","success")
+    return redirect(url_for("detalle_cotizacion", cotizacion_id=cotizacion_id))
+
+@app.route("/cotizaciones/<int:cotizacion_id>/pdf")
+def cotizacion_pdf(cotizacion_id):
+    if not logged_in(): return redirect(url_for("login"))
+    cot = query("""SELECT c.*,u.nombre AS creador_nombre
+                   FROM cotizaciones c LEFT JOIN usuarios u ON u.id=c.creado_por
+                   WHERE c.id=%s""",(cotizacion_id,),fetchone=True)
+    if not cot: abort(404)
+    items = query("SELECT * FROM cotizaciones_items WHERE cotizacion_id=%s ORDER BY id",
+                  (cotizacion_id,),fetchall=True) or []
+    config = query("SELECT * FROM config WHERE id=1",fetchone=True) or {}
+    return render_template("cotizacion_pdf.html",
+                           cot=cot, items=items, empresa=EMPRESA,
+                           config=config, IVA=IVA)
+
+@app.route("/cotizaciones/<int:cotizacion_id>/duplicar", methods=["POST"])
+def duplicar_cotizacion(cotizacion_id):
+    if not logged_in(): return redirect(url_for("login"))
+    cot   = query("SELECT * FROM cotizaciones WHERE id=%s",(cotizacion_id,),fetchone=True)
+    if not cot: abort(404)
+    items = query("SELECT * FROM cotizaciones_items WHERE cotizacion_id=%s ORDER BY id",
+                  (cotizacion_id,),fetchall=True) or []
+    uid   = session["user_id"]
+    now   = datetime.now().strftime("%Y-%m-%d %H:%M")
+    folio = gen_folio_cot()
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("""INSERT INTO cotizaciones
+            (folio,cliente_id,cliente_nombre,estatus,validez_dias,moneda,
+             descuento_global,subtotal,descuento_monto,impuesto,total,
+             notas,condiciones,creado_por,fecha_creacion,fecha_actualizacion,fecha_vencimiento)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (folio,cot["cliente_id"],cot["cliente_nombre"],"borrador",
+             cot["validez_dias"],cot["moneda"],cot["descuento_global"],
+             cot["subtotal"],cot["descuento_monto"],cot["impuesto"],cot["total"],
+             cot["notas"],cot["condiciones"],uid,now,now,cot["fecha_vencimiento"]))
+        new_id = cur.fetchone()["id"]
+        for it in items:
+            cur.execute("""INSERT INTO cotizaciones_items
+                (cotizacion_id,item_code,item_nombre,uom,cantidad,precio_unitario,descuento,subtotal)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (new_id,it["item_code"],it["item_nombre"],it["uom"],
+                 it["cantidad"],it["precio_unitario"],it["descuento"],it["subtotal"]))
+        conn.commit(); cur.close(); conn.close()
+        flash(f"Cotización duplicada como {folio} ✅","success")
+        return redirect(url_for("detalle_cotizacion", cotizacion_id=new_id))
+    except Exception as e:
+        flash(f"Error: {e}","danger")
+        return redirect(url_for("cotizaciones"))
 
 # ── SERVICIOS ─────────────────────────────────────────────
 PRIORIDADES  = ["baja","media","alta","urgente"]
