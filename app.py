@@ -837,6 +837,36 @@ def eliminar_cliente(cliente_id):
     flash("Cliente eliminado","success")
     return redirect(url_for("clientes"))
 
+
+# ── BÚSQUEDA DE CLIENTES (autocomplete) ───────────────────
+@app.route("/clientes/buscar")
+def buscar_clientes():
+    if not logged_in(): return jsonify([])
+    q   = request.args.get("q","").strip()
+    uid = session["user_id"]
+    rol = session["rol"]
+    if len(q) < 1: return jsonify([])
+
+    base = """SELECT id, nombre, empresa, telefono, clasificacion, estado_semaforo
+              FROM clientes WHERE activo=1 AND (nombre ILIKE %s OR empresa ILIKE %s)"""
+    params = [f"%{q}%", f"%{q}%"]
+
+    if not can_see_all() and rol != "supervisor":
+        base += " AND vendedor_id=%s"
+        params.append(uid)
+
+    base += " ORDER BY nombre LIMIT 10"
+    rows = query(base, tuple(params), fetchall=True) or []
+
+    return jsonify([{
+        "id":            r["id"],
+        "nombre":        r["nombre"],
+        "empresa":       r["empresa"] or "",
+        "telefono":      r["telefono"] or "",
+        "clasificacion": r["clasificacion"] or "",
+        "semaforo":      r["estado_semaforo"] or "verde",
+    } for r in rows])
+
 # ── ERROR HANDLERS ────────────────────────────────────────
 @app.errorhandler(403)
 def error_403(e):

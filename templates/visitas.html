@@ -150,7 +150,22 @@
           <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label">Cliente <span class="text-danger">*</span></label>
-              <input class="form-control" name="cliente" placeholder="Nombre del cliente" required>
+              <div style="position:relative;">
+                <input class="form-control" id="cliente-input" name="cliente"
+                       placeholder="Escribe para buscar..." required
+                       autocomplete="off" oninput="buscarCliente(this.value)">
+                <div id="cliente-dropdown" style="
+                  display:none; position:absolute; top:100%; left:0; right:0; z-index:3000;
+                  background:#fff; border:1px solid #dee2e6; border-radius:0 0 8px 8px;
+                  box-shadow:0 8px 24px rgba(0,0,0,0.12); max-height:260px; overflow-y:auto;">
+                </div>
+              </div>
+              <div id="cliente-seleccionado" style="display:none;margin-top:6px;padding:8px 12px;
+                background:#f0e6f0;border-radius:7px;font-size:12.5px;display:flex;align-items:center;gap:8px;">
+                <i class="bi bi-person-check-fill" style="color:#714B67;"></i>
+                <span id="cliente-info-text"></span>
+                <button type="button" onclick="limpiarCliente()" style="margin-left:auto;background:none;border:none;color:#adb5bd;cursor:pointer;font-size:14px;">×</button>
+              </div>
             </div>
             <div class="col-md-6">
               <label class="form-label">Próxima visita</label>
@@ -217,6 +232,13 @@
 {% block extra_head %}
 <style>
   .foto-dropzone { border:2px dashed #dee2e6;border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .15s; }
+  .cl-item { padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f1f3;transition:background .1s; }
+  .cl-item:hover { background:#f8f9fb; }
+  .cl-item:last-child { border-bottom:none; }
+  .cl-name { font-weight:600;font-size:13.5px;color:#1a1a2e; }
+  .cl-sub { font-size:12px;color:#6c757d;margin-top:2px; }
+  .cl-sem { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+  .cl-no-result { padding:14px 16px;font-size:13px;color:#adb5bd;text-align:center; }
   .foto-dropzone:hover { border-color:#714B67;background:#fdf8fc; }
   .foto-thumb { width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid #dee2e6; }
 
@@ -363,6 +385,8 @@ document.getElementById('modalNueva').addEventListener('hidden.bs.modal',()=>{
   document.getElementById('form-visita').reset();
   document.getElementById('fotos-preview').innerHTML='';
   document.getElementById('fotos-error').style.display='none';
+  document.getElementById('cliente-dropdown').style.display='none';
+  document.getElementById('cliente-seleccionado').style.display='none';
   clearFirma();
 });
 </script>
