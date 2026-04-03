@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% block title %}Perfiles y Permisos{% endblock %}
+{% block breadcrumb %}Perfiles y Permisos{% endblock %}
+
+{% block extra_head %}
+<style>
+  .perm-table { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; }
+  .perm-table thead th {
+    background:#f8f9fb; color:#6c757d; font-size:11px; font-weight:600;
+    text-transform:uppercase; letter-spacing:0.5px;
+    padding:10px 14px; border-bottom:1px solid #e2e5e9; white-space:nowrap;
+  }
+  .perm-table tbody td {
+    padding:10px 14px; border-bottom:1px solid #f0f1f3; vertical-align:middle;
+  }
+  .perm-table tbody tr:last-child td { border-bottom:none; }
+  .perm-table tbody tr:hover { background:#f9fafb; }
+
+  /* Módulo header row */
+  .modulo-header {
+    background:#1e1e2e !important;
+    color:#fff !important;
+    font-size:11px !important;
+    font-weight:600 !important;
+    text-transform:uppercase !important;
+    letter-spacing:1px !important;
+    padding:8px 14px !important;
+  }
+  .modulo-label {
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:12px; font-weight:600; color:#fff;
+  }
+
+  /* Toggle switch */
+  .toggle-wrap { display:flex; align-items:center; justify-content:center; }
+  .perm-toggle {
+    position:relative; width:36px; height:20px;
+    display:inline-block; flex-shrink:0;
+  }
+  .perm-toggle input { opacity:0; width:0; height:0; }
+  .perm-slider {
+    position:absolute; inset:0; background:#dee2e6;
+    border-radius:20px; cursor:pointer; transition:background .2s;
+  }
+  .perm-slider::before {
+    content:''; position:absolute;
+    width:14px; height:14px; left:3px; top:3px;
+    background:#fff; border-radius:50%; transition:transform .2s;
+  }
+  .perm-toggle input:checked + .perm-slider { background:#714B67; }
+  .perm-toggle input:checked + .perm-slider::before { transform:translateX(16px); }
+  .perm-toggle input:disabled + .perm-slider { opacity:0.5; cursor:not-allowed; }
+
+  .accion-label { font-size:11px; color:#6c757d; margin-top:2px; text-align:center; }
+
+  /* Saving indicator */
+  .saving-dot {
+    width:7px; height:7px; border-radius:50%;
+    background:#adb5bd; display:inline-block;
+    transition:background .3s;
+  }
+  .saving-dot.saving { background:#f59e0b; animation:pulse .6s infinite; }
+  .saving-dot.saved  { background:#16a34a; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* User card */
+  .user-chip {
+    display:flex; align-items:center; gap:9px; min-width:160px;
+  }
+  .user-avatar-sm {
+    width:28px; height:28px; border-radius:50%;
+    background:#714B67; color:#fff; font-size:11px; font-weight:600;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .user-name-sm { font-weight:500; font-size:13px; }
+  .user-rol-sm { font-size:11px; color:#adb5bd; }
+
+  /* Módulo icons */
+  .mod-icon { font-size:14px; }
+
+  /* Legend */
+  .legend-item { display:flex; align-items:center; gap:6px; font-size:12px; color:#6c757d; }
+  .legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <h1>Perfiles y Permisos</h1>
+    <p>Control granular de acceso por usuario y módulo</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="legend-item"><div class="legend-dot" style="background:#714B67;"></div> Activo</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#dee2e6;"></div> Inactivo</div>
+    <div class="saving-dot" id="save-indicator" title="Estado de guardado"></div>
+    <span id="save-label" style="font-size:12px;color:#adb5bd;">Todo guardado</span>
+  </div>
+</div>
+
+{% set modulo_icons = {
+  "visitas": "bi-map-fill",
+  "calendario": "bi-calendar3",
+  "usuarios": "bi-people-fill",
+  "reportes": "bi-bar-chart-fill",
+  "configuracion": "bi-gear-fill",
+  "permisos": "bi-shield-lock-fill"
+} %}
+
+{% set modulo_nombres = {
+  "visitas": "Visitas",
+  "calendario": "Calendario",
+  "usuarios": "Usuarios",
+  "reportes": "Reportes",
+  "configuracion": "Configuración",
+  "permisos": "Permisos"
+} %}
+
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-shield-lock-fill me-1" style="color:#714B67;"></i>
+    Matriz de permisos
+    <span class="ms-2" style="font-size:12px;font-weight:400;color:#6c757d;">
+      · {{ usuarios|length }} usuarios · {{ modulos|length }} módulos · Guardado automático
+    </span>
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table class="perm-table">
+      <thead>
+        <tr>
+          <th style="min-width:200px;">Usuario</th>
+          <th style="text-align:center;width:60px;">Ver</th>
+          <th style="text-align:center;width:60px;">Crear</th>
+          <th style="text-align:center;width:60px;">Editar</th>
+          <th style="text-align:center;width:60px;">Eliminar</th>
+          <th style="width:90px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for modulo in modulos %}
+        <!-- MÓDULO HEADER -->
+        <tr>
+          <td colspan="6" class="modulo-header">
+            <span class="modulo-label">
+              <i class="bi {{ modulo_icons.get(modulo, 'bi-circle') }} mod-icon"></i>
+              {{ modulo_nombres.get(modulo, modulo|capitalize) }}
+            </span>
+          </td>
+        </tr>
+
+        <!-- USUARIOS para este módulo -->
+        {% for u in usuarios %}
+        {% set p = perms_map.get(u.id, {}).get(modulo, {"ver":False,"crear":False,"editar":False,"eliminar":False}) %}
+        {% set es_admin = u.rol == 'admin' %}
+        <tr>
+          <td>
+            <div class="user-chip">
+              <div class="user-avatar-sm">{{ u.usuario[0]|upper }}</div>
+              <div>
+                <div class="user-name-sm">{{ u.nombre or u.usuario }} {{ u.apellido or '' }}</div>
+                <div class="user-rol-sm">@{{ u.usuario }} · {{ u.rol }}</div>
+              </div>
+              {% if not u.activo %}
+              <span class="badge-inactivo ms-1" style="font-size:10px;">Inactivo</span>
+              {% endif %}
+            </div>
+          </td>
+
+          {% for accion in ["ver","crear","editar","eliminar"] %}
+          <td>
+            <div class="toggle-wrap">
+              <label class="perm-toggle">
+                <input type="checkbox"
+                  data-uid="{{ u.id }}"
+                  data-modulo="{{ modulo }}"
+                  data-accion="{{ accion }}"
+                  {% if p.get(accion) %}checked{% endif %}
+                  {% if es_admin %}disabled{% endif %}
+                  onchange="guardarPermiso(this)">
+                <span class="perm-slider"></span>
+              </label>
+            </div>
+            {% if es_admin %}
+            <div class="accion-label">Admin</div>
+            {% endif %}
+          </td>
+          {% endfor %}
+
+          <td>
+            {% if not es_admin %}
+            <button class="btn btn-sm btn-outline-secondary"
+              style="font-size:11px;padding:3px 8px;"
+              onclick="resetPermisos({{ u.id }}, '{{ u.usuario }}')"
+              title="Restablecer a defaults del rol">
+              <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            {% else %}
+            <span style="font-size:11px;color:#adb5bd;">Full access</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- LEYENDA / AYUDA -->
+<div class="card mt-3">
+  <div class="card-body" style="padding:14px 20px;">
+    <div style="font-size:12px;font-weight:600;color:#6c757d;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.8px;">Guía de permisos</div>
+    <div class="row g-2">
+      <div class="col-md-3">
+        <div style="font-size:12.5px;"><b>Ver</b> — puede acceder y ver el módulo</div>
+      </div>
+      <div class="col-md-3">
+        <div style="font-size:12.5px;"><b>Crear</b> — puede crear nuevos registros</div>
+      </div>
+      <div class="col-md-3">
+        <div style="font-size:12.5px;"><b>Editar</b> — puede modificar registros existentes</div>
+      </div>
+      <div class="col-md-3">
+        <div style="font-size:12.5px;"><b>Eliminar</b> — puede borrar registros</div>
+      </div>
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:#adb5bd;">
+      <i class="bi bi-info-circle me-1"></i>
+      Los cambios se guardan automáticamente al activar/desactivar un permiso.
+      Los usuarios con rol <b>Admin</b> siempre tienen acceso completo sin importar esta configuración.
+      El botón <i class="bi bi-arrow-counterclockwise"></i> restablece los permisos al valor por defecto del rol del usuario.
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let saveTimer = null;
+
+function setSaveState(state) {
+  const dot = document.getElementById('save-indicator');
+  const lbl = document.getElementById('save-label');
+  if (state === 'saving') {
+    dot.className = 'saving-dot saving';
+    lbl.textContent = 'Guardando...';
+    lbl.style.color = '#f59e0b';
+  } else if (state === 'saved') {
+    dot.className = 'saving-dot saved';
+    lbl.textContent = 'Guardado';
+    lbl.style.color = '#16a34a';
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      dot.className = 'saving-dot';
+      lbl.textContent = 'Todo guardado';
+      lbl.style.color = '#adb5bd';
+    }, 2000);
+  } else {
+    dot.className = 'saving-dot';
+    lbl.style.color = '#c5221f';
+    lbl.textContent = 'Error al guardar';
+  }
+}
+
+async function guardarPermiso(checkbox) {
+  const uid    = checkbox.dataset.uid;
+  const modulo = checkbox.dataset.modulo;
+  const accion = checkbox.dataset.accion;
+  const valor  = checkbox.checked;
+
+  setSaveState('saving');
+  checkbox.disabled = true;
+
+  try {
+    const res = await fetch('/permisos/guardar', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({usuario_id: uid, modulo, accion, valor})
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setSaveState('saved');
+    } else {
+      setSaveState('error');
+      checkbox.checked = !valor; // revert
+    }
+  } catch (e) {
+    setSaveState('error');
+    checkbox.checked = !valor;
+  } finally {
+    checkbox.disabled = false;
+  }
+}
+
+function resetPermisos(uid, usuario) {
+  if (!confirm(`¿Restablecer permisos de "${usuario}" a los defaults de su rol?`)) return;
+  fetch(`/permisos/reset/${uid}`, {method:'POST'})
+    .then(() => location.reload());
+}
+</script>
+{% endblock %}

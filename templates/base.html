@@ -219,6 +219,9 @@
     <a href="{{ url_for('configuracion') }}" class="nav-link-item {% if request.endpoint == 'configuracion' %}active{% endif %}">
       <i class="bi bi-gear-fill"></i> Configuración
     </a>
+    <a href="{{ url_for('permisos_modulo') }}" class="nav-link-item {% if request.endpoint == 'permisos_modulo' %}active{% endif %}">
+      <i class="bi bi-shield-lock-fill"></i> Permisos
+    </a>
     <a class="nav-link-item disabled"><i class="bi bi-robot"></i> Asistente IA <span class="nav-badge">Pronto</span></a>
   </nav>
 

@@ -25,17 +25,39 @@ BUCKET_FIRMAS = "firmas"
 BUCKET_AVA    = "avatares"
 ALLOWED_EXT   = {"png", "jpg", "jpeg", "webp"}
 
-# ── PERMISOS POR ROL ──────────────────────────────────────
-PERMISOS = {
-    "admin":      {"ver_todo":True,  "crear":True,  "editar":True,  "eliminar":True,  "exportar":True,  "config":True},
-    "gerente":    {"ver_todo":True,  "crear":False, "editar":False, "eliminar":False, "exportar":True,  "config":False},
-    "supervisor": {"ver_todo":False, "crear":False, "editar":False, "eliminar":False, "exportar":False, "config":False},
-    "vendedor":   {"ver_todo":False, "crear":True,  "editar":False, "eliminar":False, "exportar":False, "config":False},
+# ── PERMISOS BASE POR ROL (fallback si no hay permisos en BD) ─
+PERMISOS_ROL = {
+    "admin":      {"ver":True,  "crear":True,  "editar":True,  "eliminar":True},
+    "gerente":    {"ver":True,  "crear":False, "editar":False, "eliminar":False},
+    "supervisor": {"ver":True,  "crear":False, "editar":False, "eliminar":False},
+    "vendedor":   {"ver":True,  "crear":True,  "editar":False, "eliminar":False},
 }
 
-def tiene_permiso(permiso):
+MODULOS = ["visitas","calendario","usuarios","reportes","configuracion","permisos"]
+
+def get_permisos_usuario(uid, modulo):
+    """Obtiene permisos de un usuario para un módulo. Admin siempre tiene todo."""
+    if session.get("rol") == "admin":
+        return {"ver":True,"crear":True,"editar":True,"eliminar":True}
+    try:
+        p = query("SELECT * FROM permisos_usuario WHERE usuario_id=%s AND modulo=%s",
+                  (uid, modulo), fetchone=True)
+        if p:
+            return {"ver":bool(p["puede_ver"]),"crear":bool(p["puede_crear"]),
+                    "editar":bool(p["puede_editar"]),"eliminar":bool(p["puede_eliminar"])}
+    except Exception:
+        pass
+    # Fallback a permisos por rol
     rol = session.get("rol","vendedor")
-    return PERMISOS.get(rol, {}).get(permiso, False)
+    return PERMISOS_ROL.get(rol, {"ver":True,"crear":False,"editar":False,"eliminar":False})
+
+def tiene_permiso(accion, modulo="visitas"):
+    """Chequea si el usuario actual tiene un permiso específico en un módulo."""
+    uid = session.get("user_id")
+    if not uid: return False
+    if session.get("rol") == "admin": return True
+    p = get_permisos_usuario(uid, modulo)
+    return p.get(accion, False)
 
 # ── DB ────────────────────────────────────────────────────
 def get_db():
@@ -135,8 +157,15 @@ def can_see_all(): return session.get("rol") in ["admin","gerente"]
 
 @app.context_processor
 def inject_globals():
-    perms = PERMISOS.get(session.get("rol","vendedor"), {})
-    return {"now": lambda: datetime.now().strftime("%d/%m/%Y %H:%M"), "perms": perms}
+    uid = session.get("user_id")
+    def get_perms(modulo):
+        if not uid: return {}
+        return get_permisos_usuario(uid, modulo)
+    return {
+        "now": lambda: datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "perms": get_perms("visitas"),
+        "get_perms": get_perms,
+    }
 
 # ── LOGIN ─────────────────────────────────────────────────
 @app.route("/")
@@ -225,7 +254,7 @@ def visitas():
 @app.route("/visitas/guardar", methods=["POST"])
 def guardar_visita():
     if not logged_in(): return redirect(url_for("login"))
-    if not tiene_permiso("crear"):
+    if not tiene_permiso("crear", "visitas"):
         flash("No tienes permiso para crear visitas.","danger")
         return redirect(url_for("visitas"))
     cliente    = request.form.get("cliente","").strip()
@@ -263,7 +292,7 @@ def guardar_visita():
 @app.route("/visitas/eliminar/<int:actividad_id>", methods=["POST"])
 def eliminar_visita(actividad_id):
     if not logged_in(): return redirect(url_for("login"))
-    if not tiene_permiso("eliminar"):
+    if not tiene_permiso("eliminar", "visitas"):
         flash("No tienes permiso para eliminar visitas.","danger"); return redirect(url_for("visitas"))
     query("DELETE FROM fotos WHERE actividad_id=%s",(actividad_id,),commit=True)
     query("DELETE FROM actividades WHERE id=%s",(actividad_id,),commit=True)
@@ -347,7 +376,7 @@ def calendario_eventos():
 @app.route("/calendario/crear", methods=["POST"])
 def calendario_crear():
     if not logged_in(): return jsonify({"ok":False,"msg":"No autenticado"}), 401
-    if not tiene_permiso("crear"):
+    if not tiene_permiso("crear", "visitas"):
         return jsonify({"ok":False,"msg":"Sin permiso"}), 403
     data = request.get_json()
     uid  = session["user_id"]
@@ -521,6 +550,105 @@ def olvide_password():
                       (user["id"],email,datetime.now().strftime("%Y-%m-%d %H:%M")),commit=True)
             except Exception: pass
     return render_template("olvide_password.html", empresa=EMPRESA, logo=LOGO, msg=msg)
+
+
+# ── PERFILES Y PERMISOS ───────────────────────────────────
+@app.route("/permisos")
+def permisos_modulo():
+    if not logged_in(): return redirect(url_for("login"))
+    if not is_admin(): abort(403)
+
+    usuarios_list = query("""SELECT id,usuario,nombre,apellido,rol,activo
+                             FROM usuarios ORDER BY nombre""", fetchall=True)
+
+    # Construir matriz: {uid: {modulo: {ver,crear,editar,eliminar}}}
+    all_perms = query("SELECT * FROM permisos_usuario", fetchall=True) or []
+    perms_map = {}
+    for p in all_perms:
+        uid = p["usuario_id"]
+        if uid not in perms_map: perms_map[uid] = {}
+        perms_map[uid][p["modulo"]] = {
+            "ver": bool(p["puede_ver"]),
+            "crear": bool(p["puede_crear"]),
+            "editar": bool(p["puede_editar"]),
+            "eliminar": bool(p["puede_eliminar"]),
+        }
+
+    # Para usuarios sin permisos en BD, usar defaults de rol
+    for u in usuarios_list:
+        uid = u["id"]
+        if uid not in perms_map:
+            perms_map[uid] = {}
+        rol = u["rol"]
+        base = PERMISOS_ROL.get(rol, {"ver":True,"crear":False,"editar":False,"eliminar":False})
+        for m in MODULOS:
+            if m not in perms_map[uid]:
+                perms_map[uid][m] = base.copy()
+
+    return render_template("permisos.html", empresa=EMPRESA, logo=LOGO,
+                           usuarios=usuarios_list, modulos=MODULOS, perms_map=perms_map)
+
+
+@app.route("/permisos/guardar", methods=["POST"])
+def permisos_guardar():
+    if not logged_in(): return redirect(url_for("login"))
+    if not is_admin(): abort(403)
+
+    data = request.get_json()
+    if not data: return jsonify({"ok": False, "msg": "Sin datos"}), 400
+
+    uid    = data.get("usuario_id")
+    modulo = data.get("modulo")
+    accion = data.get("accion")  # ver/crear/editar/eliminar
+    valor  = 1 if data.get("valor") else 0
+
+    col_map = {"ver":"puede_ver","crear":"puede_crear",
+               "editar":"puede_editar","eliminar":"puede_eliminar"}
+    col = col_map.get(accion)
+    if not col or modulo not in MODULOS:
+        return jsonify({"ok": False, "msg": "Parametro invalido"}), 400
+
+    try:
+        # Upsert
+        existing = query("SELECT id FROM permisos_usuario WHERE usuario_id=%s AND modulo=%s",
+                         (uid, modulo), fetchone=True)
+        if existing:
+            query(f"UPDATE permisos_usuario SET {col}=%s WHERE usuario_id=%s AND modulo=%s",
+                  (valor, uid, modulo), commit=True)
+        else:
+            # Insert con defaults del rol
+            u = query("SELECT rol FROM usuarios WHERE id=%s", (uid,), fetchone=True)
+            base = PERMISOS_ROL.get(u["rol"] if u else "vendedor",
+                                    {"ver":1,"crear":0,"editar":0,"eliminar":0})
+            vals = {k: 1 if v else 0 for k,v in base.items()}
+            vals[accion] = valor
+            query("""INSERT INTO permisos_usuario
+                     (usuario_id,modulo,puede_ver,puede_crear,puede_editar,puede_eliminar)
+                     VALUES (%s,%s,%s,%s,%s,%s)""",
+                  (uid, modulo, vals["ver"], vals["crear"],
+                   vals["editar"], vals["eliminar"]), commit=True)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
+@app.route("/permisos/reset/<int:uid>", methods=["POST"])
+def permisos_reset(uid):
+    """Resetea permisos de un usuario a los defaults de su rol."""
+    if not logged_in(): return redirect(url_for("login"))
+    if not is_admin(): abort(403)
+    u = query("SELECT rol FROM usuarios WHERE id=%s", (uid,), fetchone=True)
+    if not u: abort(404)
+    base = PERMISOS_ROL.get(u["rol"], {"ver":True,"crear":False,"editar":False,"eliminar":False})
+    query("DELETE FROM permisos_usuario WHERE usuario_id=%s", (uid,), commit=True)
+    for m in MODULOS:
+        query("""INSERT INTO permisos_usuario
+                 (usuario_id,modulo,puede_ver,puede_crear,puede_editar,puede_eliminar)
+                 VALUES (%s,%s,%s,%s,%s,%s)""",
+              (uid, m, 1 if base["ver"] else 0, 1 if base["crear"] else 0,
+               1 if base["editar"] else 0, 1 if base["eliminar"] else 0), commit=True)
+    flash("Permisos restablecidos al rol por defecto","success")
+    return redirect(url_for("permisos_modulo"))
 
 if __name__ == "__main__":
     app.run(debug=True)
