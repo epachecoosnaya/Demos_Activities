@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}{{ ls.folio }}{% endblock %}
+{% block breadcrumb %}Servicios / {{ ls.folio }}{% endblock %}
+
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <h1 style="font-family:monospace;">{{ ls.folio }}</h1>
+      <span style="background:{{ bg_prio.get(ls.prioridad,'#f8f9fa') }};color:{{ color_prio.get(ls.prioridad,'#6c757d') }};border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;">
+        {{ ls.prioridad|upper if ls.prioridad=='urgente' else ls.prioridad|capitalize }}
+      </span>
+      <span style="background:{{ bg_est.get(ls.estatus,'#f8f9fa') }};color:{{ color_est.get(ls.estatus,'#6c757d') }};border-radius:20px;padding:4px 12px;font-size:12px;font-weight:500;">
+        {{ ls.estatus|capitalize }}
+      </span>
+    </div>
+    <p>Creada {{ ls.fecha_creacion[:10] if ls.fecha_creacion else '—' }}
+       {% if ls.creador_nombre %} por {{ ls.creador_nombre }}{% endif %}
+    </p>
+  </div>
+  <a href="{{ url_for('servicios') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i> Volver
+  </a>
+</div>
+
+<div class="row g-3">
+
+  <!-- COLUMNA IZQUIERDA -->
+  <div class="col-md-4">
+
+    <!-- CLIENTE -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-person me-1" style="color:#714B67;"></i> Cliente</div>
+      <div class="card-body" style="padding:16px;">
+        {% if ls.cliente_obj_nombre %}
+        <div style="font-weight:600;font-size:14px;margin-bottom:4px;">{{ ls.cliente_obj_nombre }}</div>
+        {% if ls.cliente_empresa %}<div style="font-size:12.5px;color:#6c757d;">{{ ls.cliente_empresa }}</div>{% endif %}
+        {% if ls.cliente_tel %}<div style="font-size:12.5px;margin-top:4px;"><i class="bi bi-telephone me-1" style="color:#adb5bd;"></i>{{ ls.cliente_tel }}</div>{% endif %}
+        <a href="{{ url_for('detalle_cliente', cliente_id=ls.cliente_id) }}" class="btn btn-sm btn-outline-primary mt-2" style="font-size:12px;">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Ver ficha cliente
+        </a>
+        {% else %}
+        <div style="font-size:13.5px;font-weight:500;">{{ ls.cliente_nombre or '—' }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- EQUIPO -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-cpu me-1" style="color:#714B67;"></i> Equipo / Artículo</div>
+      <div class="card-body" style="padding:16px;">
+        {% if ls.item_code %}
+        <div style="font-family:monospace;font-size:12px;color:#adb5bd;margin-bottom:2px;">{{ ls.item_code }}</div>
+        <div style="font-weight:600;font-size:13.5px;margin-bottom:8px;">{{ ls.item_nombre or '—' }}</div>
+        {% if item %}
+        <div style="font-size:12px;color:#6c757d;">
+          {% if item.item_group %}<div><b>Grupo:</b> {{ item.item_group }}</div>{% endif %}
+          {% if item.uom %}<div><b>UM:</b> {{ item.uom }}</div>{% endif %}
+        </div>
+        {% endif %}
+        {% if ls.serial_number %}
+        <div style="margin-top:10px;padding:8px 10px;background:#f8f9fb;border-radius:7px;font-size:12.5px;">
+          <div style="font-size:11px;color:#adb5bd;margin-bottom:2px;">Número de serie</div>
+          <div style="font-family:monospace;font-weight:600;">{{ ls.serial_number }}</div>
+        </div>
+        {% endif %}
+        {% else %}
+        <div style="color:#adb5bd;font-size:13px;">Sin equipo registrado</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- DATOS CRM -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-info-circle me-1" style="color:#714B67;"></i> Detalles</div>
+      <div class="card-body" style="padding:16px;">
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:#adb5bd;">Técnico asignado</div>
+          <div style="font-size:13.5px;font-weight:500;">{{ ls.tecnico_nombre or '—' }}</div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:#adb5bd;">Fecha de atención</div>
+          <div style="font-size:13.5px;">{{ ls.fecha_atencion or '—' }}</div>
+        </div>
+        {% if ls.fecha_cierre %}
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;color:#adb5bd;">Fecha de cierre</div>
+          <div style="font-size:13.5px;">{{ ls.fecha_cierre }}</div>
+        </div>
+        {% endif %}
+        <div>
+          <div style="font-size:11px;color:#adb5bd;">Última actualización</div>
+          <div style="font-size:13px;color:#6c757d;">{{ ls.fecha_actualizacion[:16] if ls.fecha_actualizacion else '—' }}</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- COLUMNA DERECHA -->
+  <div class="col-md-8">
+
+    <!-- PROBLEMA -->
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-chat-text me-1" style="color:#714B67;"></i> Problema reportado</div>
+      <div class="card-body" style="padding:16px;">
+        <div style="font-size:14px;line-height:1.7;color:#495057;white-space:pre-line;">{{ ls.problema }}</div>
+      </div>
+    </div>
+
+    <!-- ACTUALIZAR -->
+    {% if get_perms('servicios').get('editar') or ls.tecnico_id == session.get('user_id') %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-pencil-square me-1" style="color:#714B67;"></i> Actualizar llamada</div>
+      <div class="card-body" style="padding:16px;">
+        <form method="POST" action="{{ url_for('actualizar_servicio', llamada_id=ls.id) }}">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Estatus</label>
+              <select class="form-select form-select-sm" name="estatus">
+                {% for e in estatus_svc %}
+                <option value="{{ e }}" {% if ls.estatus==e %}selected{% endif %}>{{ e|capitalize }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Prioridad</label>
+              <select class="form-select form-select-sm" name="prioridad">
+                {% for p in prioridades %}
+                <option value="{{ p }}" {% if ls.prioridad==p %}selected{% endif %}>{{ p|capitalize }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Técnico</label>
+              <select class="form-select form-select-sm" name="tecnico_id">
+                {% for t in tecnicos %}
+                <option value="{{ t.id }}" {% if ls.tecnico_id==t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Nota / Actualización</label>
+              <textarea class="form-control form-control-sm" name="nota" rows="2" placeholder="Describe el avance, solución o comentario..."></textarea>
+            </div>
+          </div>
+          <div style="margin-top:12px;text-align:right;">
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="bi bi-check-lg me-1"></i> Guardar actualización
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- HISTORIAL DE SEGUIMIENTO -->
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-clock-history me-1" style="color:#714B67;"></i>
+        Historial de seguimiento
+        <span class="ms-2" style="font-size:12px;font-weight:400;color:#6c757d;">({{ seguimiento|length }} entradas)</span>
+      </div>
+      {% if seguimiento %}
+      <div style="max-height:480px;overflow-y:auto;">
+        {% for s in seguimiento %}
+        <div style="padding:14px 18px;border-bottom:1px solid #f0f1f3;display:flex;gap:12px;align-items:flex-start;">
+          <div style="width:34px;height:34px;border-radius:50%;background:#f0e6f0;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:700;color:#714B67;">
+            {{ (s.user_nombre or s.user_usuario or '?')[0]|upper }}
+          </div>
+          <div style="flex:1;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+              <div style="font-weight:600;font-size:13px;">{{ s.user_nombre or s.user_usuario }}</div>
+              <div style="font-size:11.5px;color:#adb5bd;flex-shrink:0;">{{ s.fecha[:16] if s.fecha else '—' }}</div>
+            </div>
+            <div style="font-size:13px;color:#495057;margin-top:3px;">{{ s.accion }}</div>
+            {% if s.nota %}
+            <div style="font-size:12.5px;color:#6c757d;margin-top:4px;padding:8px 10px;background:#f8f9fb;border-radius:6px;line-height:1.5;">
+              {{ s.nota }}
+            </div>
+            {% endif %}
+            {% if s.estatus_anterior and s.estatus_nuevo and s.estatus_anterior != s.estatus_nuevo %}
+            <div style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:11.5px;">
+              <span style="background:#f8f9fa;padding:2px 8px;border-radius:10px;color:#6c757d;">{{ s.estatus_anterior }}</span>
+              <i class="bi bi-arrow-right" style="color:#adb5bd;font-size:10px;"></i>
+              <span style="background:{{ bg_est.get(s.estatus_nuevo,'#f8f9fa') }};color:{{ color_est.get(s.estatus_nuevo,'#6c757d') }};padding:2px 8px;border-radius:10px;">{{ s.estatus_nuevo }}</span>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="padding:30px;text-align:center;color:#adb5bd;font-size:13px;">Sin historial aún</div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}

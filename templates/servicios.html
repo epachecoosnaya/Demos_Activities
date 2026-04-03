@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block title %}Servicios{% endblock %}
+{% block breadcrumb %}Servicios{% endblock %}
+
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <h1>Llamadas de Servicio</h1>
+    <p>{{ llamadas|length }} llamadas</p>
+  </div>
+  {% if get_perms('servicios').get('crear') %}
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNueva">
+    <i class="bi bi-plus-lg me-1"></i> Nueva llamada
+  </button>
+  {% endif %}
+</div>
+
+<!-- STATS -->
+<div class="row g-2 mb-3">
+  {% set abiertas   = llamadas|selectattr('estatus','eq','abierta')|list|length %}
+  {% set en_proceso = llamadas|selectattr('estatus','eq','en proceso')|list|length %}
+  {% set urgentes   = llamadas|selectattr('prioridad','eq','urgente')|list|length %}
+  {% set resueltas  = llamadas|selectattr('estatus','eq','resuelta')|list|length %}
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#e8f0fe;"><i class="bi bi-headset" style="color:#1a56db;"></i></div>
+      <div><div class="stat-val">{{ abiertas }}</div><div class="stat-lbl">Abiertas</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#fff3e0;"><i class="bi bi-gear-wide-connected" style="color:#e65100;"></i></div>
+      <div><div class="stat-val">{{ en_proceso }}</div><div class="stat-lbl">En proceso</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#fce8e6;"><i class="bi bi-exclamation-triangle-fill" style="color:#c5221f;"></i></div>
+      <div><div class="stat-val">{{ urgentes }}</div><div class="stat-lbl">Urgentes</div></div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#e6f4ea;"><i class="bi bi-check-circle-fill" style="color:#1e7e34;"></i></div>
+      <div><div class="stat-val">{{ resueltas }}</div><div class="stat-lbl">Resueltas</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- FILTROS -->
+<div class="card mb-3">
+  <div class="card-body" style="padding:12px 16px;">
+    <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div style="flex:1;min-width:160px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Buscar</label>
+        <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Folio, cliente, equipo...">
+      </div>
+      <div style="min-width:130px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Estatus</label>
+        <select class="form-select form-select-sm" name="estatus">
+          <option value="">Todos</option>
+          {% for e in estatus_svc %}<option value="{{ e }}" {% if fil_est==e %}selected{% endif %}>{{ e|capitalize }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="min-width:120px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Prioridad</label>
+        <select class="form-select form-select-sm" name="prioridad">
+          <option value="">Todas</option>
+          {% for p in prioridades %}<option value="{{ p }}" {% if fil_prio==p %}selected{% endif %}>{{ p|capitalize }}</option>{% endfor %}
+        </select>
+      </div>
+      {% if session.get('rol') in ['admin','gerente','supervisor'] %}
+      <div style="min-width:140px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Técnico</label>
+        <select class="form-select form-select-sm" name="tecnico">
+          <option value="">Todos</option>
+          {% for t in tecnicos %}<option value="{{ t.id }}" {% if fil_tec==t.id|string %}selected{% endif %}>{{ t.nombre or t.usuario }}</option>{% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div style="display:flex;gap:6px;">
+        <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+        <a href="{{ url_for('servicios') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- TABLA -->
+<div class="card">
+  <div class="card-header"><i class="bi bi-headset me-1" style="color:#714B67;"></i> Llamadas de servicio</div>
+  {% if llamadas %}
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Folio</th>
+          <th>Prioridad</th>
+          <th>Cliente</th>
+          <th>Equipo</th>
+          <th>Serie</th>
+          <th>Problema</th>
+          <th>Técnico</th>
+          <th>Estatus</th>
+          <th>Fecha</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in llamadas %}
+        <tr>
+          <td style="font-family:monospace;font-size:13px;font-weight:600;color:#714B67;">{{ l.folio }}</td>
+          <td>
+            <span style="background:{{ bg_prio.get(l.prioridad,'#f8f9fa') }};color:{{ color_prio.get(l.prioridad,'#6c757d') }};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;">
+              {{ l.prioridad|upper if l.prioridad == 'urgente' else l.prioridad|capitalize }}
+            </span>
+          </td>
+          <td style="font-size:13px;font-weight:500;">{{ l.cliente_nombre or '—' }}</td>
+          <td style="font-size:12.5px;color:#6c757d;">{{ l.item_nombre or '—' }}</td>
+          <td style="font-size:12px;font-family:monospace;color:#6c757d;">{{ l.serial_number or '—' }}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:#495057;" title="{{ l.problema }}">{{ l.problema }}</td>
+          <td>
+            {% if l.tecnico_nombre %}
+            <span class="badge-vendedor">{{ l.tecnico_nombre }}</span>
+            {% else %}<span style="color:#adb5bd;font-size:12px;">Sin asignar</span>{% endif %}
+          </td>
+          <td>
+            <span style="background:{{ bg_est.get(l.estatus,'#f8f9fa') }};color:{{ color_est.get(l.estatus,'#6c757d') }};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;">
+              {{ l.estatus|capitalize }}
+            </span>
+          </td>
+          <td style="font-size:12px;color:#adb5bd;">{{ l.fecha_creacion[:10] if l.fecha_creacion else '—' }}</td>
+          <td>
+            <a href="{{ url_for('detalle_servicio', llamada_id=l.id) }}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-eye"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:50px;text-align:center;color:#adb5bd;">
+    <i class="bi bi-headset" style="font-size:40px;display:block;margin-bottom:12px;"></i>
+    No hay llamadas de servicio.<br>
+    {% if get_perms('servicios').get('crear') %}
+    <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalNueva">
+      <i class="bi bi-plus-lg me-1"></i> Crear primera llamada
+    </button>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- MODAL NUEVA LLAMADA -->
+{% if get_perms('servicios').get('crear') %}
+<div class="modal fade" id="modalNueva" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-headset me-2" style="color:#714B67;"></i>Nueva llamada de servicio</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="form-nueva-svc" method="POST" action="{{ url_for('crear_servicio') }}">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin-bottom:10px;">Cliente</div>
+          <div class="row g-3 mb-3">
+            <div class="col-12">
+              <label class="form-label">Cliente <span class="text-danger">*</span></label>
+              <div style="position:relative;">
+                <input class="form-control" id="svc-cliente-input" placeholder="Buscar cliente..." autocomplete="off" oninput="buscarClienteSvc(this.value)">
+                <div id="svc-cliente-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:3000;background:#fff;border:1px solid #dee2e6;border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>
+              </div>
+              <input type="hidden" id="svc-cliente-id"     name="cliente_id">
+              <input type="hidden" id="svc-cliente-nombre" name="cliente_nombre">
+              <div id="svc-cliente-chip" style="display:none;margin-top:6px;padding:7px 12px;background:#f0e6f0;border-radius:7px;font-size:12.5px;display:flex;align-items:center;gap:8px;">
+                <i class="bi bi-person-check-fill" style="color:#714B67;"></i>
+                <span id="svc-cliente-chip-text"></span>
+                <button type="button" onclick="limpiarClienteSvc()" style="margin-left:auto;background:none;border:none;color:#adb5bd;cursor:pointer;">×</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin-bottom:10px;">Equipo</div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-7">
+              <label class="form-label">Artículo / Equipo</label>
+              <div style="position:relative;">
+                <input class="form-control" id="svc-item-input" placeholder="Código o nombre del artículo..." autocomplete="off" oninput="buscarItemSvc(this.value)">
+                <div id="svc-item-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:3000;background:#fff;border:1px solid #dee2e6;border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>
+              </div>
+              <input type="hidden" id="svc-item-code"   name="item_code">
+              <input type="hidden" id="svc-item-nombre" name="item_nombre">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">Número de serie</label>
+              <select class="form-select" id="svc-serial" name="serial_number">
+                <option value="">— Selecciona artículo primero —</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin-bottom:10px;">Llamada</div>
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Problema reportado <span class="text-danger">*</span></label>
+              <textarea class="form-control" name="problema" rows="3" placeholder="Describe el problema o solicitud de servicio..." required></textarea>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Prioridad</label>
+              <select class="form-select" name="prioridad">
+                {% for p in prioridades %}<option value="{{ p }}" {% if p=='media' %}selected{% endif %}>{{ p|capitalize }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Técnico asignado</label>
+              <select class="form-select" name="tecnico_id">
+                {% for t in tecnicos %}
+                <option value="{{ t.id }}" {% if t.id == session.get('user_id') %}selected{% endif %}>{{ t.nombre or t.usuario }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Fecha de atención</label>
+              <input class="form-control" name="fecha_atencion" type="date">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" form="form-nueva-svc" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i> Crear llamada
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── AUTOCOMPLETE CLIENTE ──
+let svcClienteTimer = null;
+function buscarClienteSvc(q) {
+  clearTimeout(svcClienteTimer);
+  const dd = document.getElementById('svc-cliente-dd');
+  if (!q || q.length < 1) { dd.style.display='none'; return; }
+  svcClienteTimer = setTimeout(async () => {
+    const res = await fetch(`/clientes/buscar?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!data.length) { dd.innerHTML='<div style="padding:12px;font-size:13px;color:#adb5bd;text-align:center;">Sin resultados</div>'; dd.style.display='block'; return; }
+    const colors = {verde:'#16a34a',amarillo:'#f59e0b',rojo:'#c5221f'};
+    dd.innerHTML = data.map(c => `
+      <div style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f1f3;" onmouseover="this.style.background='#f8f9fb'" onmouseout="this.style.background=''"
+           onclick="selClienteSvc(${c.id||'null'},${JSON.stringify(c.nombre)},${JSON.stringify(c.empresa||'')})">
+        <div style="font-weight:600;font-size:13px;">${c.nombre}</div>
+        <div style="font-size:11.5px;color:#6c757d;">${c.empresa||''}</div>
+      </div>`).join('');
+    dd.style.display='block';
+  }, 200);
+}
+function selClienteSvc(id, nombre, empresa) {
+  document.getElementById('svc-cliente-id').value = id || '';
+  document.getElementById('svc-cliente-nombre').value = nombre;
+  document.getElementById('svc-cliente-input').value = nombre;
+  document.getElementById('svc-cliente-dd').style.display='none';
+  document.getElementById('svc-cliente-chip-text').textContent = nombre + (empresa ? ' · '+empresa : '');
+  document.getElementById('svc-cliente-chip').style.display='flex';
+}
+function limpiarClienteSvc() {
+  document.getElementById('svc-cliente-id').value='';
+  document.getElementById('svc-cliente-nombre').value='';
+  document.getElementById('svc-cliente-input').value='';
+  document.getElementById('svc-cliente-chip').style.display='none';
+}
+
+// ── AUTOCOMPLETE ARTÍCULO ──
+let svcItemTimer = null;
+function buscarItemSvc(q) {
+  clearTimeout(svcItemTimer);
+  const dd = document.getElementById('svc-item-dd');
+  if (!q || q.length < 1) { dd.style.display='none'; return; }
+  svcItemTimer = setTimeout(async () => {
+    const res = await fetch(`/servicios/buscar-items?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!data.length) { dd.innerHTML='<div style="padding:12px;font-size:13px;color:#adb5bd;text-align:center;">Sin artículos</div>'; dd.style.display='block'; return; }
+    dd.innerHTML = data.map(i => `
+      <div style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f1f3;" onmouseover="this.style.background='#f8f9fb'" onmouseout="this.style.background=''"
+           onclick="selItemSvc(${JSON.stringify(i.item_code)},${JSON.stringify(i.item_name)})">
+        <div style="font-weight:600;font-size:12.5px;font-family:monospace;">${i.item_code}</div>
+        <div style="font-size:12px;color:#6c757d;">${i.item_name} ${i.item_group?'· '+i.item_group:''}</div>
+      </div>`).join('');
+    dd.style.display='block';
+  }, 200);
+}
+async function selItemSvc(code, nombre) {
+  document.getElementById('svc-item-code').value = code;
+  document.getElementById('svc-item-nombre').value = nombre;
+  document.getElementById('svc-item-input').value = `${code} — ${nombre}`;
+  document.getElementById('svc-item-dd').style.display='none';
+  // Cargar seriales
+  const sel = document.getElementById('svc-serial');
+  sel.innerHTML = '<option value="">Cargando...</option>';
+  const res = await fetch(`/servicios/seriales/${encodeURIComponent(code)}`);
+  const data = await res.json();
+  if (!data.length) { sel.innerHTML = '<option value="">Sin números de serie</option>'; return; }
+  sel.innerHTML = '<option value="">— Seleccionar serie —</option>' +
+    data.map(s => `<option value="${s.serial}">${s.serial} ${s.almacen?'('+s.almacen+')':''} ${s.status?'· '+s.status:''}</option>`).join('');
+}
+
+// Cerrar dropdowns al click fuera
+document.addEventListener('click', e => {
+  if (!e.target.closest('#svc-cliente-input') && !e.target.closest('#svc-cliente-dd'))
+    document.getElementById('svc-cliente-dd').style.display='none';
+  if (!e.target.closest('#svc-item-input') && !e.target.closest('#svc-item-dd'))
+    document.getElementById('svc-item-dd').style.display='none';
+});
+</script>
+{% endblock %}

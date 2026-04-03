@@ -33,7 +33,7 @@ PERMISOS_ROL = {
     "vendedor":   {"ver":True,  "crear":True,  "editar":False, "eliminar":False},
 }
 
-MODULOS = ["visitas","calendario","clientes","usuarios","reportes","configuracion","permisos"]
+MODULOS = ["visitas","calendario","clientes","servicios","usuarios","reportes","configuracion","permisos"]
 
 def get_permisos_usuario(uid, modulo):
     """Obtiene permisos de un usuario para un módulo. Admin siempre tiene todo."""
@@ -135,6 +135,26 @@ def init_db():
     cur.execute("""INSERT INTO usuarios (usuario,nombre,apellido,email,password,rol,activo,fecha_creacion)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (usuario) DO NOTHING""",
         ("demo","Demo","Vendedor","demo@demo.com",generate_password_hash("1234"),"vendedor",1,now))
+    cur.execute("""CREATE TABLE IF NOT EXISTS llamadas_servicio (
+        id SERIAL PRIMARY KEY, folio TEXT UNIQUE,
+        cliente_id INTEGER REFERENCES clientes(id),
+        cliente_nombre TEXT DEFAULT '',
+        item_code TEXT, item_nombre TEXT DEFAULT '',
+        serial_number TEXT DEFAULT '', problema TEXT NOT NULL,
+        prioridad TEXT DEFAULT 'media', estatus TEXT DEFAULT 'abierta',
+        tecnico_id INTEGER REFERENCES usuarios(id),
+        fecha_atencion TEXT DEFAULT '', fecha_cierre TEXT DEFAULT '',
+        creado_por INTEGER REFERENCES usuarios(id),
+        fecha_creacion TEXT DEFAULT '', fecha_actualizacion TEXT DEFAULT ''
+    )""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS llamadas_seguimiento (
+        id SERIAL PRIMARY KEY,
+        llamada_id INTEGER REFERENCES llamadas_servicio(id) ON DELETE CASCADE,
+        usuario_id INTEGER REFERENCES usuarios(id),
+        accion TEXT NOT NULL, nota TEXT DEFAULT '',
+        estatus_anterior TEXT DEFAULT '', estatus_nuevo TEXT DEFAULT '',
+        fecha TEXT DEFAULT ''
+    )""")
     conn.commit(); cur.close(); conn.close()
 
 init_db()
@@ -837,6 +857,215 @@ def eliminar_cliente(cliente_id):
     flash("Cliente eliminado","success")
     return redirect(url_for("clientes"))
 
+
+
+# ── SERVICIOS ─────────────────────────────────────────────
+PRIORIDADES  = ["baja","media","alta","urgente"]
+ESTATUS_SVC  = ["abierta","en proceso","resuelta","cerrada"]
+COLOR_PRIO   = {"baja":"#6c757d","media":"#1a56db","alta":"#e65100","urgente":"#c5221f"}
+COLOR_EST    = {"abierta":"#1a56db","en proceso":"#e65100","resuelta":"#1e7e34","cerrada":"#6c757d"}
+BG_PRIO      = {"baja":"#f8f9fa","media":"#e8f0fe","alta":"#fff3e0","urgente":"#fce8e6"}
+BG_EST       = {"abierta":"#e8f0fe","en proceso":"#fff3e0","resuelta":"#e6f4ea","cerrada":"#f8f9fa"}
+
+def gen_folio():
+    count = query("SELECT COUNT(*) AS c FROM llamadas_servicio", fetchone=True)["c"]
+    return f"SVC-{(count+1):04d}"
+
+@app.route("/servicios")
+def servicios():
+    if not logged_in(): return redirect(url_for("login"))
+    uid = session["user_id"]
+    rol = session["rol"]
+    filtro_est  = request.args.get("estatus","")
+    filtro_prio = request.args.get("prioridad","")
+    filtro_tec  = request.args.get("tecnico","")
+    q           = request.args.get("q","").strip()
+
+    base = """SELECT ls.*,
+              u.nombre AS tecnico_nombre, u.usuario AS tecnico_usuario,
+              c.nombre AS cliente_nombre_join
+              FROM llamadas_servicio ls
+              LEFT JOIN usuarios u ON u.id=ls.tecnico_id
+              LEFT JOIN clientes c ON c.id=ls.cliente_id
+              WHERE 1=1"""
+    params = []
+
+    # Vendedor solo ve sus llamadas (donde es técnico o las creó)
+    if not can_see_all() and rol not in ["supervisor"]:
+        base += " AND (ls.tecnico_id=%s OR ls.creado_por=%s)"
+        params += [uid, uid]
+
+    if filtro_est:  base += " AND ls.estatus=%s";       params.append(filtro_est)
+    if filtro_prio: base += " AND ls.prioridad=%s";     params.append(filtro_prio)
+    if filtro_tec:  base += " AND ls.tecnico_id=%s";    params.append(filtro_tec)
+    if q:
+        base += " AND (ls.folio ILIKE %s OR ls.cliente_nombre ILIKE %s OR ls.item_nombre ILIKE %s OR ls.problema ILIKE %s)"
+        params += [f"%{q}%"]*4
+
+    base += " ORDER BY CASE ls.prioridad WHEN 'urgente' THEN 1 WHEN 'alta' THEN 2 WHEN 'media' THEN 3 ELSE 4 END, ls.fecha_creacion DESC"
+    llamadas = query(base, tuple(params), fetchall=True) or []
+
+    tecnicos = query("SELECT id,nombre,usuario FROM usuarios WHERE activo=1 ORDER BY nombre", fetchall=True) or []
+    return render_template("servicios.html", empresa=EMPRESA, logo=LOGO,
+                           llamadas=llamadas, tecnicos=tecnicos,
+                           prioridades=PRIORIDADES, estatus_svc=ESTATUS_SVC,
+                           color_prio=COLOR_PRIO, color_est=COLOR_EST,
+                           bg_prio=BG_PRIO, bg_est=BG_EST,
+                           fil_est=filtro_est, fil_prio=filtro_prio,
+                           fil_tec=filtro_tec, q=q)
+
+@app.route("/servicios/crear", methods=["POST"])
+def crear_servicio():
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("crear","servicios"):
+        flash("Sin permiso para crear llamadas de servicio.","danger")
+        return redirect(url_for("servicios"))
+    uid  = session["user_id"]
+    now  = datetime.now().strftime("%Y-%m-%d %H:%M")
+    folio = gen_folio()
+
+    cliente_id     = request.form.get("cliente_id") or None
+    cliente_nombre = request.form.get("cliente_nombre","").strip()
+    item_code      = request.form.get("item_code","").strip() or None
+    item_nombre    = request.form.get("item_nombre","").strip()
+    serial_number  = request.form.get("serial_number","").strip()
+    problema       = request.form.get("problema","").strip()
+    prioridad      = request.form.get("prioridad","media")
+    tecnico_id     = request.form.get("tecnico_id") or uid
+    fecha_atencion = request.form.get("fecha_atencion","").strip()
+
+    if not problema:
+        flash("El problema es obligatorio.","danger"); return redirect(url_for("servicios"))
+
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("""INSERT INTO llamadas_servicio
+            (folio,cliente_id,cliente_nombre,item_code,item_nombre,serial_number,
+             problema,prioridad,estatus,tecnico_id,fecha_atencion,
+             creado_por,fecha_creacion,fecha_actualizacion)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (folio,cliente_id,cliente_nombre,item_code,item_nombre,serial_number,
+             problema,prioridad,"abierta",tecnico_id,fecha_atencion,uid,now,now))
+        llamada_id = cur.fetchone()["id"]
+        # Log inicial
+        cur.execute("""INSERT INTO llamadas_seguimiento
+            (llamada_id,usuario_id,accion,nota,estatus_anterior,estatus_nuevo,fecha)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+            (llamada_id,uid,"Llamada creada","","-","abierta",now))
+        conn.commit(); cur.close(); conn.close()
+        flash(f"Llamada {folio} creada correctamente ✅","success")
+    except Exception as e:
+        flash(f"Error: {e}","danger")
+    return redirect(url_for("servicios"))
+
+@app.route("/servicios/<int:llamada_id>")
+def detalle_servicio(llamada_id):
+    if not logged_in(): return redirect(url_for("login"))
+    uid = session["user_id"]
+    ls = query("""SELECT ls.*,
+                  u.nombre AS tecnico_nombre,
+                  c2.nombre AS creador_nombre,
+                  cl.nombre AS cliente_obj_nombre,
+                  cl.empresa AS cliente_empresa,
+                  cl.telefono AS cliente_tel
+                  FROM llamadas_servicio ls
+                  LEFT JOIN usuarios u ON u.id=ls.tecnico_id
+                  LEFT JOIN usuarios c2 ON c2.id=ls.creado_por
+                  LEFT JOIN clientes cl ON cl.id=ls.cliente_id
+                  WHERE ls.id=%s""", (llamada_id,), fetchone=True)
+    if not ls: abort(404)
+    if not can_see_all() and ls["tecnico_id"] != uid and ls["creado_por"] != uid:
+        abort(403)
+    seguimiento = query("""SELECT sg.*,u.nombre AS user_nombre,u.usuario AS user_usuario
+                           FROM llamadas_seguimiento sg
+                           JOIN usuarios u ON u.id=sg.usuario_id
+                           WHERE sg.llamada_id=%s ORDER BY sg.fecha DESC""",
+                        (llamada_id,), fetchall=True) or []
+    # Info del artículo
+    item = None
+    if ls.get("item_code"):
+        item = query("SELECT * FROM sap_items WHERE item_code=%s",(ls["item_code"],),fetchone=True)
+    # Seriales del artículo
+    seriales = []
+    if ls.get("item_code"):
+        seriales = query("""SELECT serial_number,warehouse_code,status,expiry_date
+                            FROM sap_item_serial WHERE item_code=%s AND serial_number IS NOT NULL
+                            ORDER BY serial_number LIMIT 50""",
+                         (ls["item_code"],), fetchall=True) or []
+    tecnicos = query("SELECT id,nombre FROM usuarios WHERE activo=1 ORDER BY nombre",fetchall=True) or []
+    return render_template("servicio_detalle.html", empresa=EMPRESA, logo=LOGO,
+                           ls=ls, seguimiento=seguimiento, item=item, seriales=seriales,
+                           tecnicos=tecnicos, prioridades=PRIORIDADES, estatus_svc=ESTATUS_SVC,
+                           color_prio=COLOR_PRIO, color_est=COLOR_EST,
+                           bg_prio=BG_PRIO, bg_est=BG_EST)
+
+@app.route("/servicios/<int:llamada_id>/actualizar", methods=["POST"])
+def actualizar_servicio(llamada_id):
+    if not logged_in(): return redirect(url_for("login"))
+    uid  = session["user_id"]
+    now  = datetime.now().strftime("%Y-%m-%d %H:%M")
+    ls   = query("SELECT * FROM llamadas_servicio WHERE id=%s",(llamada_id,),fetchone=True)
+    if not ls: abort(404)
+    if not can_see_all() and ls["tecnico_id"] != uid and ls["creado_por"] != uid:
+        abort(403)
+
+    nuevo_estatus = request.form.get("estatus", ls["estatus"])
+    nueva_prio    = request.form.get("prioridad", ls["prioridad"])
+    nuevo_tec     = request.form.get("tecnico_id", ls["tecnico_id"])
+    nota          = request.form.get("nota","").strip()
+    fecha_cierre  = now[:10] if nuevo_estatus in ["resuelta","cerrada"] and ls["estatus"] not in ["resuelta","cerrada"] else ls.get("fecha_cierre","")
+
+    cambios = []
+    if nuevo_estatus != ls["estatus"]: cambios.append(f"Estatus: {ls['estatus']} → {nuevo_estatus}")
+    if nueva_prio    != ls["prioridad"]: cambios.append(f"Prioridad: {ls['prioridad']} → {nueva_prio}")
+    if str(nuevo_tec) != str(ls["tecnico_id"] or ""): cambios.append("Técnico reasignado")
+    if nota: cambios.append(f"Nota: {nota}")
+
+    try:
+        query("""UPDATE llamadas_servicio SET estatus=%s,prioridad=%s,tecnico_id=%s,
+                 fecha_cierre=%s,fecha_actualizacion=%s WHERE id=%s""",
+              (nuevo_estatus,nueva_prio,nuevo_tec,fecha_cierre,now,llamada_id),commit=True)
+        if cambios:
+            query("""INSERT INTO llamadas_seguimiento
+                     (llamada_id,usuario_id,accion,nota,estatus_anterior,estatus_nuevo,fecha)
+                     VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                  (llamada_id,uid," | ".join(cambios),nota,ls["estatus"],nuevo_estatus,now),commit=True)
+        flash("Llamada actualizada ✅","success")
+    except Exception as e:
+        flash(f"Error: {e}","danger")
+    return redirect(url_for("detalle_servicio", llamada_id=llamada_id))
+
+@app.route("/servicios/buscar-items")
+def buscar_items():
+    if not logged_in(): return jsonify([])
+    q = request.args.get("q","").strip()
+    if len(q) < 1: return jsonify([])
+    rows = query("""SELECT item_code, item_name, item_group, uom, price
+                    FROM sap_items WHERE active=true
+                    AND (item_code ILIKE %s OR item_name ILIKE %s)
+                    ORDER BY item_name LIMIT 10""",
+                 (f"%{q}%",f"%{q}%"), fetchall=True) or []
+    return jsonify([{
+        "item_code":  r["item_code"],
+        "item_name":  r["item_name"] or "",
+        "item_group": r["item_group"] or "",
+        "uom":        r["uom"] or "",
+        "price":      float(r["price"] or 0),
+    } for r in rows])
+
+@app.route("/servicios/seriales/<item_code>")
+def seriales_item(item_code):
+    if not logged_in(): return jsonify([])
+    rows = query("""SELECT serial_number, warehouse_code, status
+                    FROM sap_item_serial WHERE item_code=%s
+                    AND serial_number IS NOT NULL
+                    ORDER BY serial_number LIMIT 50""",
+                 (item_code,), fetchall=True) or []
+    return jsonify([{
+        "serial": r["serial_number"],
+        "almacen": r["warehouse_code"] or "",
+        "status": r["status"] or "",
+    } for r in rows])
 
 # ── BÚSQUEDA DE CLIENTES (autocomplete) ───────────────────
 @app.route("/clientes/buscar")
