@@ -9,9 +9,11 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <style>
     :root {
-      --odoo-purple: #714B67;
-      --odoo-purple-light: #875A7B;
-      --odoo-sidebar-bg: #1e1e2e;
+      --odoo-purple:      {{ color_primary }};
+      --odoo-purple-light:{{ color_light }};
+      --odoo-purple-dark: {{ color_dark }};
+      --odoo-purple-rgba: {{ color_rgba }};
+      --odoo-sidebar-bg:  {{ color_sidebar }};
       --odoo-border: #e2e5e9;
       --odoo-bg: #f5f6f8;
       --odoo-text: #1a1a2e;
@@ -54,7 +56,7 @@
     }
     .nav-link-item i { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
     .nav-link-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
-    .nav-link-item.active { background: rgba(113,75,103,0.8); color: #fff; font-weight: 500; }
+    .nav-link-item.active { background: var(--odoo-purple); color: #fff; font-weight: 500; }
     .nav-link-item.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
     .nav-badge { margin-left: auto; font-size: 10px; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); padding: 1px 7px; border-radius: 9px; }
 
@@ -153,7 +155,7 @@
     /* FORM */
     .form-label { font-size: 13px; font-weight: 500; color: #495057; margin-bottom: 5px; }
     .form-control, .form-select { border-radius: 7px; border: 1px solid #ced4da; font-size: 13.5px; padding: 8px 12px; }
-    .form-control:focus, .form-select:focus { border-color: var(--odoo-purple-light); box-shadow: 0 0 0 3px rgba(113,75,103,0.12); }
+    .form-control:focus, .form-select:focus { border-color: var(--odoo-purple-light); box-shadow: 0 0 0 3px var(--odoo-purple-rgba); }
 
     /* FLASH */
     .flash-wrap { position: fixed; top: 62px; right: 18px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; max-width: 360px; }
@@ -190,7 +192,7 @@
   <div class="sidebar-logo">
     <img src="/static/{{ logo }}" alt="logo">
     <div>
-      <div class="sidebar-company">{{ empresa }}</div>
+      <div class="sidebar-company">{{ portal_config.empresa or empresa }}</div>
       <div class="sidebar-subtitle">Portal de Actividades</div>
     </div>
   </div>

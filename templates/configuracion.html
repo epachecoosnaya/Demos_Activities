@@ -62,29 +62,77 @@
                 </button>
               </div>
               <div style="font-size:12px;color:#adb5bd;margin-top:4px;">
-                Ingresa tu sitio web y extrae automáticamente los colores de tu marca
+                Ingresa tu sitio web y extrae los colores de tu marca automáticamente
               </div>
             </div>
-            <!-- Paleta extraída -->
+
+            <!-- PALETA EXTRAÍDA -->
             <div class="col-12" id="paleta-section" style="display:none;">
               <label class="form-label">Colores detectados — haz clic para aplicar</label>
               <div id="paleta-colores" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
             </div>
-            <div class="col-md-6">
-              <label class="form-label">Color principal</label>
-              <div style="display:flex;gap:8px;align-items:center;">
+
+            <!-- COLOR PICKER + PREVIEW PORTAL -->
+            <div class="col-12">
+              <label class="form-label">Color principal del portal</label>
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
                 <input type="color" name="color_primario" id="color-picker"
                        value="{{ config.color_primario or '#714B67' }}"
-                       style="width:48px;height:38px;border-radius:7px;border:1px solid #ced4da;cursor:pointer;padding:2px;"
-                       oninput="document.getElementById('color-hex').value=this.value">
-                <input class="form-control" id="color-hex" value="{{ config.color_primario or '#714B67' }}"
-                       style="font-family:monospace;"
-                       oninput="document.getElementById('color-picker').value=this.value">
+                       style="width:52px;height:40px;border-radius:8px;border:1px solid #ced4da;cursor:pointer;padding:2px;">
+                <input class="form-control" id="color-hex"
+                       value="{{ config.color_primario or '#714B67' }}"
+                       style="font-family:monospace;max-width:120px;">
+                <span style="font-size:12px;color:#adb5bd;">↑ Escribe un color HEX o elige del picker</span>
               </div>
-              <div style="margin-top:10px;">
-                <label class="form-label" style="font-size:12px;">Vista previa:</label>
-                <div id="color-preview" style="height:36px;border-radius:8px;background:{{ config.color_primario or '#714B67' }};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:500;">
-                  Tu color primario
+            </div>
+
+            <!-- PORTAL PREVIEW -->
+            <div class="col-12">
+              <label class="form-label">Vista previa del portal</label>
+              <div id="portal-preview" style="border:1px solid #e2e5e9;border-radius:12px;overflow:hidden;height:220px;display:flex;font-family:Inter,sans-serif;">
+                <!-- Sidebar mini -->
+                <div id="prev-sidebar" style="width:160px;background:#1e1e2e;padding:14px 10px;flex-shrink:0;">
+                  <div style="color:#fff;font-size:13px;font-weight:600;margin-bottom:14px;padding:0 6px;">
+                    {{ config.empresa or 'Mi Empresa' }}
+                  </div>
+                  <div id="prev-nav-active" style="border-radius:6px;padding:7px 10px;font-size:12px;font-weight:500;color:#fff;margin-bottom:4px;">
+                    <i class="bi bi-grid-fill me-1"></i> Inicio
+                  </div>
+                  <div style="border-radius:6px;padding:7px 10px;font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;">
+                    <i class="bi bi-map-fill me-1"></i> Visitas
+                  </div>
+                  <div style="border-radius:6px;padding:7px 10px;font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px;">
+                    <i class="bi bi-people-fill me-1"></i> Clientes
+                  </div>
+                  <div style="border-radius:6px;padding:7px 10px;font-size:12px;color:rgba(255,255,255,0.5);">
+                    <i class="bi bi-bag me-1"></i> Ventas
+                  </div>
+                </div>
+                <!-- Content mini -->
+                <div style="flex:1;background:#f5f6f8;padding:16px;overflow:hidden;">
+                  <!-- Header bar -->
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                    <span style="font-size:14px;font-weight:700;">Dashboard</span>
+                    <div id="prev-btn" style="border-radius:6px;padding:5px 12px;font-size:12px;color:#fff;font-weight:500;">
+                      <i class="bi bi-plus-lg me-1"></i> Nuevo
+                    </div>
+                  </div>
+                  <!-- Stat cards -->
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                    <div style="background:#fff;border-radius:8px;padding:10px 12px;border:1px solid #e2e5e9;">
+                      <div style="font-size:18px;font-weight:700;" id="prev-stat">24</div>
+                      <div style="font-size:11px;color:#6c757d;">Visitas</div>
+                    </div>
+                    <div style="background:#fff;border-radius:8px;padding:10px 12px;border:1px solid #e2e5e9;">
+                      <div style="font-size:18px;font-weight:700;">87</div>
+                      <div style="font-size:11px;color:#6c757d;">Clientes</div>
+                    </div>
+                  </div>
+                  <!-- Badge sample -->
+                  <div style="background:#fff;border-radius:8px;padding:10px 12px;border:1px solid #e2e5e9;display:flex;align-items:center;gap:8px;">
+                    <div id="prev-badge" style="border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;color:#fff;">Activo</div>
+                    <span style="font-size:12px;color:#6c757d;">Vista previa de badge</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -147,17 +195,51 @@
 
 {% block extra_js %}
 <script>
+function hexToRgb(h) {
+  h = h.replace('#','');
+  return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+}
+function darken(h,p){ const [r,g,b]=hexToRgb(h); return `rgb(${r*(1-p)},${g*(1-p)},${b*(1-p)})`; }
+function lighten(h,p){ const [r,g,b]=hexToRgb(h); return `rgb(${Math.min(255,r+(255-r)*p)},${Math.min(255,g+(255-g)*p)},${Math.min(255,b+(255-b)*p)})`; }
+function isLight(h){ const [r,g,b]=hexToRgb(h); return (r*299+g*587+b*114)/1000 > 160; }
+
+function aplicarTema(color) {
+  if (!color || !/^#[0-9A-Fa-f]{6}$/i.test(color)) return;
+
+  // Update picker + hex field
+  document.getElementById('color-picker').value = color;
+  document.getElementById('color-hex').value = color.toUpperCase();
+
+  // Calculate sidebar color (very dark version of primary)
+  const [r,g,b] = hexToRgb(color);
+  const sidebarColor = `rgb(${Math.round(r*0.2)},${Math.round(g*0.2)},${Math.round(b*0.2)})`;
+  const lightColor = lighten(color, 0.85);
+
+  // Update portal CSS variables in real-time
+  document.documentElement.style.setProperty('--odoo-purple', color);
+  document.documentElement.style.setProperty('--odoo-purple-light', lighten(color, 0.15));
+  document.documentElement.style.setProperty('--odoo-purple-dark', darken(color, 0.15));
+  document.documentElement.style.setProperty('--odoo-sidebar-bg', sidebarColor);
+  document.documentElement.style.setProperty('--odoo-purple-rgba', `rgba(${r},${g},${b},0.12)`);
+
+  // Update preview
+  document.getElementById('prev-sidebar').style.background = sidebarColor;
+  document.getElementById('prev-nav-active').style.background = color;
+  document.getElementById('prev-btn').style.background = color;
+  document.getElementById('prev-badge').style.background = color;
+  document.getElementById('prev-stat').style.color = color;
+}
+
 // Sync color picker ↔ hex input
 document.getElementById('color-picker').addEventListener('input', function() {
-  document.getElementById('color-hex').value = this.value;
-  document.getElementById('color-preview').style.background = this.value;
+  aplicarTema(this.value);
 });
 document.getElementById('color-hex').addEventListener('input', function() {
-  if (/^#[0-9A-Fa-f]{6}$/.test(this.value)) {
-    document.getElementById('color-picker').value = this.value;
-    document.getElementById('color-preview').style.background = this.value;
-  }
+  if (/^#[0-9A-Fa-f]{6}$/i.test(this.value)) aplicarTema(this.value);
 });
+
+// Apply current color on load
+aplicarTema(document.getElementById('color-picker').value);
 
 async function extraerColores() {
   const url = document.getElementById('sitio-web-input').value.trim();
@@ -194,10 +276,7 @@ async function extraerColores() {
 }
 
 function aplicarColor(color) {
-  document.getElementById('color-picker').value = color;
-  document.getElementById('color-hex').value = color;
-  document.getElementById('color-preview').style.background = color;
-  // Highlight selected
+  aplicarTema(color);
   document.querySelectorAll('#paleta-colores div').forEach(d => {
     d.style.borderColor = d.title === color ? '#fff' : 'transparent';
     d.style.transform = d.title === color ? 'scale(1.15)' : 'scale(1)';

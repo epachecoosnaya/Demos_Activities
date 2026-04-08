@@ -347,10 +347,58 @@ def inject_globals():
     def get_perms(modulo):
         if not uid: return {}
         return get_permisos_usuario(uid, modulo)
+
+    # Cargar configuración visual del portal
+    portal_config = {}
+    try:
+        cfg = query("SELECT * FROM config WHERE id=1", fetchone=True)
+        if cfg:
+            portal_config = dict(cfg)
+    except Exception:
+        pass
+
+    # Calcular variantes de color
+    def hex_to_rgb(h):
+        h = h.lstrip("#")
+        return tuple(int(h[i:i+2],16) for i in (0,2,4))
+
+    def rgb_to_hex(r,g,b):
+        return "#{:02X}{:02X}{:02X}".format(int(r),int(g),int(b))
+
+    def darken(h, pct=0.15):
+        r,g,b = hex_to_rgb(h)
+        return rgb_to_hex(r*(1-pct),g*(1-pct),b*(1-pct))
+
+    def lighten(h, pct=0.85):
+        r,g,b = hex_to_rgb(h)
+        return rgb_to_hex(min(255,r+(255-r)*pct),min(255,g+(255-g)*pct),min(255,b+(255-b)*pct))
+
+    def rgba(h, alpha=0.12):
+        r,g,b = hex_to_rgb(h)
+        return f"rgba({r},{g},{b},{alpha})"
+
+    primary = portal_config.get("color_primario","#714B67") or "#714B67"
+    try:
+        color_light   = lighten(primary, 0.82)
+        color_dark    = darken(primary, 0.15)
+        color_rgba    = rgba(primary, 0.12)
+        color_sidebar = darken(primary, 0.55) if primary != "#714B67" else "#1e1e2e"
+    except Exception:
+        color_light   = "#875A7B"
+        color_dark    = "#5a3a52"
+        color_rgba    = "rgba(113,75,103,0.12)"
+        color_sidebar = "#1e1e2e"
+
     return {
-        "now": lambda: datetime.now().strftime("%d/%m/%Y %H:%M"),
-        "perms": get_perms("visitas"),
-        "get_perms": get_perms,
+        "now":          lambda: datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "perms":        get_perms("visitas"),
+        "get_perms":    get_perms,
+        "portal_config": portal_config,
+        "color_primary":  primary,
+        "color_light":    color_light,
+        "color_dark":     color_dark,
+        "color_rgba":     color_rgba,
+        "color_sidebar":  color_sidebar,
     }
 
 # ── LOGIN ─────────────────────────────────────────────────
