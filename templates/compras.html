@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}Órdenes de Compra{% endblock %}
+{% block breadcrumb %}Compras{% endblock %}
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left"><h1>Órdenes de Compra</h1><p>{{ ordenes|length }} registros</p></div>
+  {% if get_perms('compras').get('crear') %}
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNueva">
+    <i class="bi bi-plus-lg me-1"></i> Nueva OC
+  </button>
+  {% endif %}
+</div>
+
+<!-- STATS -->
+<div class="row g-2 mb-3">
+  {% set borradores = ordenes|selectattr('estatus','eq','borrador')|list|length %}
+  {% set confirmadas = ordenes|selectattr('estatus','eq','confirmada')|list|length %}
+  {% set recibidas = ordenes|selectattr('estatus','eq','recibida')|list|length %}
+  <div class="col-4"><div class="stat-card">
+    <div class="stat-icon" style="background:#f8f9fa;"><i class="bi bi-file-earmark" style="color:#6c757d;"></i></div>
+    <div><div class="stat-val">{{ borradores }}</div><div class="stat-lbl">Borradores</div></div>
+  </div></div>
+  <div class="col-4"><div class="stat-card">
+    <div class="stat-icon" style="background:#e8f0fe;"><i class="bi bi-send" style="color:#1a56db;"></i></div>
+    <div><div class="stat-val">{{ confirmadas }}</div><div class="stat-lbl">Confirmadas</div></div>
+  </div></div>
+  <div class="col-4"><div class="stat-card">
+    <div class="stat-icon" style="background:#e6f4ea;"><i class="bi bi-check-circle" style="color:#1e7e34;"></i></div>
+    <div><div class="stat-val">{{ recibidas }}</div><div class="stat-lbl">Recibidas</div></div>
+  </div></div>
+</div>
+
+<!-- FILTROS -->
+<div class="card mb-3">
+  <div class="card-body" style="padding:12px 16px;">
+    <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div style="flex:1;min-width:160px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Buscar</label>
+        <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Folio o proveedor...">
+      </div>
+      <div style="min-width:140px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Estatus</label>
+        <select class="form-select form-select-sm" name="estatus">
+          <option value="">Todos</option>
+          {% for e in estatus_oc %}<option value="{{ e }}" {% if fil_est==e %}selected{% endif %}>{{ e|capitalize }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+        <a href="{{ url_for('compras') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-cart me-1" style="color:#714B67;"></i> Órdenes de compra</div>
+  {% if ordenes %}
+  <div class="table-responsive">
+    <table class="table" style="font-size:13px;">
+      <thead><tr><th>Folio</th><th>Proveedor</th><th>Almacén</th><th>Estatus</th><th>SAP</th><th style="text-align:right;">Total</th><th>Fecha</th><th></th></tr></thead>
+      <tbody>
+        {% set col_est = {"borrador":"#f8f9fa","confirmada":"#e8f0fe","recibida parcial":"#fff3e0","recibida":"#e6f4ea","cancelada":"#fce8e6"} %}
+        {% set txt_est = {"borrador":"#6c757d","confirmada":"#1a56db","recibida parcial":"#e65100","recibida":"#1e7e34","cancelada":"#c5221f"} %}
+        {% for o in ordenes %}
+        <tr>
+          <td style="font-family:monospace;color:#714B67;font-weight:600;">{{ o.folio }}</td>
+          <td style="font-weight:500;">{{ o.proveedor_nombre or '—' }}</td>
+          <td style="font-size:12px;color:#6c757d;">{{ o.almacen_nombre or '—' }}</td>
+          <td><span style="background:{{ col_est.get(o.estatus,'#f8f9fa') }};color:{{ txt_est.get(o.estatus,'#6c757d') }};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;">{{ o.estatus|capitalize }}</span></td>
+          <td>
+            {% if o.sap_sync_status=='ok' %}<i class="bi bi-check-circle-fill" style="color:#1e7e34;" title="SAP OK"></i>
+            {% elif o.sap_sync_status=='error' %}<i class="bi bi-exclamation-triangle-fill" style="color:#c5221f;" title="{{ o.sap_sync_msg }}"></i>
+            {% else %}<i class="bi bi-clock" style="color:#adb5bd;"></i>{% endif %}
+          </td>
+          <td style="text-align:right;font-weight:600;">$ {{ "%.2f"|format(o.total or 0) }}</td>
+          <td style="font-size:12px;color:#adb5bd;">{{ o.fecha_creacion[:10] if o.fecha_creacion else '—' }}</td>
+          <td><a href="{{ url_for('detalle_compra',oc_id=o.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:50px;text-align:center;color:#adb5bd;">
+    <i class="bi bi-cart" style="font-size:40px;display:block;margin-bottom:12px;"></i> Sin órdenes de compra.
+  </div>
+  {% endif %}
+</div>
+
+{% if get_perms('compras').get('crear') %}
+<div class="modal fade" id="modalNueva" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-cart me-2" style="color:#714B67;"></i>Nueva orden de compra</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="form-oc" method="POST" action="{{ url_for('crear_orden_compra') }}">
+          <input type="hidden" name="items_json" id="oc-items-json">
+          <div class="row g-3 mb-3">
+            <div class="col-md-5">
+              <label class="form-label">Proveedor <span class="text-danger">*</span></label>
+              <div style="position:relative;">
+                <input class="form-control" id="oc-prov-input" placeholder="Buscar proveedor..." autocomplete="off" oninput="buscarProvOC(this.value)">
+                <div id="oc-prov-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1px solid #dee2e6;border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:200px;overflow-y:auto;"></div>
+              </div>
+              <input type="hidden" id="oc-prov-id" name="proveedor_id">
+              <input type="hidden" id="oc-prov-nombre" name="proveedor_nombre">
+            </div>
+            <div class="col-md-4"><label class="form-label">Almacén destino</label>
+              <select class="form-select" name="almacen_id">
+                <option value="">— Seleccionar —</option>
+                {% for a in almacenes %}<option value="{{ a.id }}">{{ a.nombre }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-3"><label class="form-label">Fecha entrega</label>
+              <input class="form-control" name="fecha_entrega" type="date"></div>
+          </div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin-bottom:8px;">Artículos</div>
+          <div style="position:relative;margin-bottom:10px;">
+            <input class="form-control" id="oc-item-input" placeholder="Buscar artículo..." autocomplete="off" oninput="buscarItemOC(this.value)">
+            <div id="oc-item-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1px solid #dee2e6;border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:240px;overflow-y:auto;"></div>
+          </div>
+          <div class="table-responsive">
+            <table class="table" style="font-size:13px;">
+              <thead><tr><th>Código</th><th>Artículo</th><th>UM</th><th style="width:90px;">Cant.</th><th style="width:120px;">Precio</th><th style="text-align:right;width:110px;">Subtotal</th><th style="width:40px;"></th></tr></thead>
+              <tbody id="oc-items-tbody"><tr id="oc-row-vacio"><td colspan="7" style="text-align:center;color:#adb5bd;padding:20px;">Busca artículos arriba</td></tr></tbody>
+              <tfoot>
+                <tr><td colspan="5" style="text-align:right;font-size:13px;color:#6c757d;">Subtotal:</td><td style="text-align:right;font-weight:600;" id="oc-subtotal">$ 0.00</td><td></td></tr>
+                <tr><td colspan="5" style="text-align:right;font-size:13px;color:#6c757d;">IVA 16%:</td><td style="text-align:right;" id="oc-iva">$ 0.00</td><td></td></tr>
+                <tr style="border-top:2px solid #714B67;"><td colspan="5" style="text-align:right;font-weight:700;font-size:15px;">TOTAL:</td><td style="text-align:right;font-weight:700;font-size:15px;color:#714B67;" id="oc-total">$ 0.00</td><td></td></tr>
+              </tfoot>
+            </table>
+          </div>
+          <div class="col-12 mt-2"><label class="form-label">Notas</label>
+            <textarea class="form-control" name="notas" rows="2"></textarea></div>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="guardarOC()"><i class="bi bi-check-lg me-1"></i>Crear OC</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+<script>
+let ocItems=[];
+let _provTimer=null,_ocItemTimer=null;
+
+function buscarProvOC(q) {
+  clearTimeout(_provTimer); const dd=document.getElementById('oc-prov-dd');
+  if(!q){dd.style.display='none';return;}
+  _provTimer=setTimeout(async()=>{
+    const res=await fetch('/clientes/buscar?q='+encodeURIComponent(q));
+    const data=await res.json(); window._ocProvList=data;
+    if(!data.length){dd.innerHTML='<div style="padding:10px;color:#adb5bd;text-align:center;">Sin resultados</div>';dd.style.display='block';return;}
+    dd.innerHTML=data.map((c,i)=>`<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid #f0f1f3;" onmouseover="this.style.background='#f8f9fb'" onmouseout="this.style.background=''"
+      onmousedown="event.preventDefault();document.getElementById('oc-prov-id').value=window._ocProvList[${i}].id||'';document.getElementById('oc-prov-nombre').value=window._ocProvList[${i}].nombre;document.getElementById('oc-prov-input').value=window._ocProvList[${i}].nombre;document.getElementById('oc-prov-dd').style.display='none';">
+      <b style="font-size:13px;">${c.nombre}</b><br><span style="font-size:11.5px;color:#6c757d;">${c.empresa||''}</span></div>`).join('');
+    dd.style.display='block';
+  },200);
+}
+
+function buscarItemOC(q) {
+  clearTimeout(_ocItemTimer); const dd=document.getElementById('oc-item-dd');
+  if(!q){dd.style.display='none';return;}
+  _ocItemTimer=setTimeout(async()=>{
+    const res=await fetch('/articulos/buscar-unificado?q='+encodeURIComponent(q));
+    const data=await res.json(); window._ocItemList=data;
+    if(!data.length){dd.innerHTML='<div style="padding:10px;color:#adb5bd;text-align:center;">Sin artículos</div>';dd.style.display='block';return;}
+    dd.innerHTML=data.map((it,i)=>`<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid #f0f1f3;" onmouseover="this.style.background='#f8f9fb'" onmouseout="this.style.background=''"
+      onmousedown="event.preventDefault();agregarItemOC(window._ocItemList[${i}])">
+      <div style="font-family:monospace;font-size:12px;color:#714B67;font-weight:600;">${it.codigo}</div>
+      <div style="font-size:13px;">${it.nombre}</div>
+      <div style="font-size:11.5px;color:#6c757d;">${it.uom||''} · <b>$ ${it.precio.toFixed(2)}</b> · <span style="background:${it.fuente==='SAP'?'#e8f0fe':'#f0e6f0'};color:${it.fuente==='SAP'?'#1a56db':'#714B67'};border-radius:10px;padding:1px 6px;font-size:10px;">${it.fuente}</span></div>
+    </div>`).join('');
+    dd.style.display='block';
+  },200);
+}
+
+function agregarItemOC(it) {
+  document.getElementById('oc-item-input').value='';
+  document.getElementById('oc-item-dd').style.display='none';
+  const ex=ocItems.find(i=>i.codigo===it.codigo);
+  if(ex){ex.cantidad++;renderOCItems();return;}
+  ocItems.push({codigo:it.codigo,nombre:it.nombre,uom:it.uom||'',cantidad:1,precio_unitario:it.precio||0});
+  renderOCItems();
+}
+
+function renderOCItems() {
+  const tbody=document.getElementById('oc-items-tbody');
+  document.getElementById('oc-row-vacio').style.display=ocItems.length?'none':'';
+  tbody.querySelectorAll('tr.oc-item-row').forEach(r=>r.remove());
+  let sub=0;
+  ocItems.forEach((it,i)=>{
+    const s=it.cantidad*it.precio_unitario; sub+=s;
+    const tr=document.createElement('tr'); tr.className='oc-item-row';
+    tr.innerHTML=`<td style="font-family:monospace;font-size:12px;color:#714B67;">${it.codigo}</td>
+      <td style="font-size:13px;">${it.nombre}</td><td style="color:#6c757d;">${it.uom}</td>
+      <td><input type="number" class="form-control form-control-sm" value="${it.cantidad}" min="0.001" step="any"
+          oninput="ocItems[${i}].cantidad=parseFloat(this.value)||0;renderOCItems();" style="width:80px;"></td>
+      <td><input type="number" class="form-control form-control-sm" value="${it.precio_unitario}" min="0" step="0.01"
+          oninput="ocItems[${i}].precio_unitario=parseFloat(this.value)||0;renderOCItems();" style="width:110px;"></td>
+      <td style="text-align:right;font-weight:600;">$ ${s.toFixed(2)}</td>
+      <td><button type="button" class="btn btn-sm" style="background:#fce8e6;color:#c5221f;border:none;" onclick="ocItems.splice(${i},1);renderOCItems();"><i class="bi bi-trash"></i></button></td>`;
+    tbody.appendChild(tr);
+  });
+  const iva=sub*0.16; const tot=sub+iva;
+  document.getElementById('oc-subtotal').textContent='$ '+sub.toFixed(2);
+  document.getElementById('oc-iva').textContent='$ '+iva.toFixed(2);
+  document.getElementById('oc-total').textContent='$ '+tot.toFixed(2);
+}
+
+function guardarOC() {
+  if(!document.getElementById('oc-prov-nombre').value){alert('Selecciona un proveedor');return;}
+  if(!ocItems.length){alert('Agrega al menos un artículo');return;}
+  document.getElementById('oc-items-json').value=JSON.stringify(ocItems);
+  document.getElementById('form-oc').submit();
+}
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#oc-prov-input')&&!e.target.closest('#oc-prov-dd')) document.getElementById('oc-prov-dd').style.display='none';
+  if(!e.target.closest('#oc-item-input')&&!e.target.closest('#oc-item-dd')) document.getElementById('oc-item-dd').style.display='none';
+});
+</script>
+{% endblock %}

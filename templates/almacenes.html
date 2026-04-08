@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Almacenes{% endblock %}
+{% block breadcrumb %}Almacenes{% endblock %}
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left"><h1>Almacenes</h1><p>{{ almacenes|length }} registros</p></div>
+  {% if get_perms('almacenes').get('crear') %}
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+    <i class="bi bi-plus-lg me-1"></i> Nuevo almacén
+  </button>
+  {% endif %}
+</div>
+
+<div class="row g-3">
+  {% for a in almacenes %}
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body" style="padding:18px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-family:monospace;font-size:12px;color:#714B67;font-weight:600;">{{ a.codigo }}</div>
+            <div style="font-size:15px;font-weight:600;margin-top:2px;">{{ a.nombre }}</div>
+          </div>
+          <span style="background:#f0e6f0;color:#714B67;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:500;">{{ a.tipo|capitalize }}</span>
+        </div>
+        {% if a.descripcion %}<div style="font-size:12.5px;color:#6c757d;margin-top:8px;">{{ a.descripcion }}</div>{% endif %}
+        {% if a.ubicacion %}
+        <div style="font-size:12px;color:#adb5bd;margin-top:6px;"><i class="bi bi-geo-alt me-1"></i>{{ a.ubicacion }}</div>
+        {% endif %}
+        {% if a.resp_nombre %}
+        <div style="font-size:12px;color:#adb5bd;margin-top:4px;"><i class="bi bi-person me-1"></i>{{ a.resp_nombre }}</div>
+        {% endif %}
+        <div style="margin-top:6px;">
+          <span style="background:{% if a.fuente=='SAP' %}#e8f0fe{% else %}#f0e6f0{% endif %};color:{% if a.fuente=='SAP' %}#1a56db{% else %}#714B67{% endif %};border-radius:20px;padding:2px 8px;font-size:10px;font-weight:600;">{{ a.fuente or 'portal' }}</span>
+        </div>
+        {% if get_perms('almacenes').get('editar') %}
+        <button class="btn btn-sm btn-outline-secondary mt-2" style="font-size:12px;"
+          onclick="abrirEditar({{ a.id }},'{{ a.nombre }}','{{ a.descripcion or '' }}','{{ a.ubicacion or '' }}','{{ a.tipo }}','{{ a.responsable_id or '' }}')">
+          <i class="bi bi-pencil me-1"></i>Editar
+        </button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12"><div style="padding:50px;text-align:center;color:#adb5bd;">
+    <i class="bi bi-building" style="font-size:40px;display:block;margin-bottom:12px;"></i>
+    No hay almacenes registrados.
+  </div></div>
+  {% endfor %}
+</div>
+
+{% if get_perms('almacenes').get('crear') %}
+<div class="modal fade" id="modalNuevo" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-building me-2" style="color:#714B67;"></i>Nuevo almacén</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="form-alm" method="POST" action="{{ url_for('crear_almacen') }}">
+          <div class="row g-3">
+            <div class="col-md-4"><label class="form-label">Código <span class="text-danger">*</span></label>
+              <input class="form-control" name="codigo" placeholder="ALM01" style="text-transform:uppercase;" required></div>
+            <div class="col-md-8"><label class="form-label">Nombre <span class="text-danger">*</span></label>
+              <input class="form-control" name="nombre" placeholder="Bodega principal" required></div>
+            <div class="col-12"><label class="form-label">Descripción</label>
+              <input class="form-control" name="descripcion" placeholder="Descripción breve"></div>
+            <div class="col-md-6"><label class="form-label">Ubicación</label>
+              <input class="form-control" name="ubicacion" placeholder="Dirección o rack"></div>
+            <div class="col-md-6"><label class="form-label">Tipo</label>
+              <select class="form-select" name="tipo">
+                {% for t in tipos %}<option value="{{ t }}">{{ t|capitalize }}</option>{% endfor %}
+              </select></div>
+            <div class="col-12"><label class="form-label">Responsable</label>
+              <select class="form-select" name="responsable_id">
+                <option value="">— Sin asignar —</option>
+                {% for u in usuarios %}<option value="{{ u.id }}">{{ u.nombre or u.usuario }}</option>{% endfor %}
+              </select></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" form="form-alm" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Crear</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if get_perms('almacenes').get('editar') %}
+<div class="modal fade" id="modalEditar" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Editar almacén</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="form-editar-alm" method="POST" action="">
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label">Nombre</label>
+              <input class="form-control" name="nombre" id="edit-nombre"></div>
+            <div class="col-12"><label class="form-label">Descripción</label>
+              <input class="form-control" name="descripcion" id="edit-desc"></div>
+            <div class="col-md-6"><label class="form-label">Ubicación</label>
+              <input class="form-control" name="ubicacion" id="edit-ubi"></div>
+            <div class="col-md-6"><label class="form-label">Tipo</label>
+              <select class="form-select" name="tipo" id="edit-tipo">
+                {% for t in tipos %}<option value="{{ t }}">{{ t|capitalize }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-6"><label class="form-label">Responsable</label>
+              <select class="form-select" name="responsable_id" id="edit-resp">
+                <option value="">— Sin asignar —</option>
+                {% for u in usuarios %}<option value="{{ u.id }}">{{ u.nombre or u.usuario }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-6"><label class="form-label">Activo</label>
+              <select class="form-select" name="activo">
+                <option value="true">Activo</option><option value="false">Inactivo</option>
+              </select></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" form="form-editar-alm" class="btn btn-primary">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+<script>
+function abrirEditar(id,nombre,desc,ubi,tipo,respId) {
+  document.getElementById('form-editar-alm').action = '/almacenes/editar/'+id;
+  document.getElementById('edit-nombre').value = nombre;
+  document.getElementById('edit-desc').value = desc;
+  document.getElementById('edit-ubi').value = ubi;
+  document.getElementById('edit-tipo').value = tipo;
+  document.getElementById('edit-resp').value = respId||'';
+  new bootstrap.Modal(document.getElementById('modalEditar')).show();
+}
+</script>
+{% endblock %}

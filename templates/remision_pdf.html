@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>{{ rem.folio }} — Remisión</title>
+<style>
+@page{margin:18mm 15mm;size:A4;}*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a2e;background:#fff;}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #714B67;}
+.company-name{font-size:22px;font-weight:700;color:#714B67;}.rem-folio{font-size:20px;font-weight:700;font-family:monospace;color:#714B67;text-align:right;}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+.meta-box{background:#f8f9fb;border-radius:8px;padding:12px 14px;border-left:3px solid #714B67;}
+.meta-label{font-size:10px;color:#adb5bd;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;}
+table{width:100%;border-collapse:collapse;margin-bottom:20px;}
+thead th{background:#714B67;color:#fff;padding:8px 10px;font-size:11px;text-transform:uppercase;}
+tbody tr:nth-child(even){background:#f8f9fb;}tbody td{padding:8px 10px;border-bottom:1px solid #e2e5e9;font-size:12px;}
+.code{font-family:monospace;font-size:11px;color:#714B67;font-weight:600;}.right{text-align:right;}
+.firma{margin-top:30px;border-top:1px solid #e2e5e9;padding-top:20px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;}
+.firma-box{text-align:center;}.firma-linea{border-top:1.5px solid #1a1a2e;margin-top:50px;padding-top:6px;font-size:11px;color:#6c757d;}
+.footer{margin-top:20px;padding-top:12px;border-top:1px solid #e2e5e9;text-align:center;font-size:10px;color:#adb5bd;}
+.print-bar{position:fixed;top:12px;right:12px;display:flex;gap:8px;z-index:999;}
+.btn-print{background:#714B67;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;}
+.btn-close-bar{background:#f8f9fa;color:#495057;border:1px solid #dee2e6;border-radius:8px;padding:10px 16px;font-size:13px;cursor:pointer;}
+@media print{.no-print{display:none;}}
+</style></head><body>
+<div class="print-bar no-print">
+  <button class="btn-close-bar" onclick="window.close()">✕ Cerrar</button>
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir</button>
+</div>
+<div class="header">
+  <div><div class="company-name">{{ config.empresa or empresa }}</div><div style="font-size:11px;color:#6c757d;margin-top:3px;">Portal de Actividades</div></div>
+  <div><div style="font-size:11px;color:#adb5bd;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;text-align:right;">Remisión</div>
+    <div class="rem-folio">{{ rem.folio }}</div></div>
+</div>
+<div class="meta">
+  <div class="meta-box"><div class="meta-label">Cliente</div><div style="font-size:13px;font-weight:600;">{{ rem.cliente_nombre or '—' }}</div></div>
+  <div class="meta-box"><div class="meta-label">Detalles</div><div style="font-size:12px;">Fecha: {{ rem.fecha_entrega[:10] if rem.fecha_entrega else '—' }}<br>Almacén: {{ rem.almacen_nombre or '—' }}<br>Creado por: {{ rem.creador or '—' }}</div></div>
+</div>
+<table>
+  <thead><tr><th style="width:100px;">Código</th><th>Artículo</th><th style="width:50px;text-align:center;">UM</th><th style="width:70px;text-align:right;">Cant.</th><th style="width:110px;text-align:right;">Precio</th><th style="width:110px;text-align:right;">Subtotal</th></tr></thead>
+  <tbody>{% for it in items %}
+  <tr><td class="code">{{ it.item_code or '—' }}</td><td>{{ it.item_nombre }}</td>
+  <td style="text-align:center;color:#6c757d;">{{ it.uom or '—' }}</td>
+  <td class="right">{{ it.cantidad }}</td>
+  <td class="right">$ {{ "%.2f"|format(it.precio_unitario or 0) }}</td>
+  <td class="right" style="font-weight:600;">$ {{ "%.2f"|format(it.subtotal or 0) }}</td></tr>
+  {% if it.numero_serie %}<tr><td></td><td colspan="5" style="font-size:11px;color:#6c757d;">Serie: {{ it.numero_serie }}</td></tr>{% endif %}
+  {% endfor %}</tbody>
+</table>
+{% if rem.notas %}<div style="background:#f8f9fb;border-radius:8px;padding:12px 14px;margin-bottom:20px;font-size:12px;"><b>Notas:</b> {{ rem.notas }}</div>{% endif %}
+<div class="firma">
+  <div class="firma-box"><div class="firma-linea">Entregó</div></div>
+  <div class="firma-box"><div class="firma-linea">Transportista</div></div>
+  <div class="firma-box"><div class="firma-linea">Recibió / Cliente</div></div>
+</div>
+<div class="footer">{{ config.empresa or empresa }} · {{ rem.folio }} · {{ rem.fecha_entrega[:10] if rem.fecha_entrega else '' }}</div>
+</body></html>

@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ ov.folio }}{% endblock %}
+{% block breadcrumb %}Ventas / {{ ov.folio }}{% endblock %}
+{% block content %}
+{% set col_est={"borrador":"#f8f9fa","confirmada":"#e8f0fe","en proceso":"#fff3e0","surtida":"#e6f4ea","cancelada":"#fce8e6"} %}
+{% set txt_est={"borrador":"#6c757d","confirmada":"#1a56db","en proceso":"#e65100","surtida":"#1e7e34","cancelada":"#c5221f"} %}
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <h1 style="font-family:monospace;">{{ ov.folio }}</h1>
+      <span style="background:{{ col_est.get(ov.estatus,'#f8f9fa') }};color:{{ txt_est.get(ov.estatus,'#6c757d') }};border-radius:20px;padding:4px 14px;font-size:12px;font-weight:500;">{{ ov.estatus|capitalize }}</span>
+    </div>
+    <p>{{ ov.cliente_nombre }} · {{ ov.almacen_nombre or 'Sin almacén' }}</p>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <a href="{{ url_for('ventas') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Volver</a>
+    {% if get_perms('ventas').get('crear') and ov.estatus in ['confirmada','en proceso'] %}
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalRemision">
+      <i class="bi bi-truck me-1"></i>Crear remisión
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-info-circle me-1" style="color:#714B67;"></i>Detalles</div>
+      <div class="card-body" style="padding:16px;">
+        <div style="margin-bottom:10px;"><div style="font-size:11px;color:#adb5bd;">Cliente</div><div style="font-weight:600;">{{ ov.cliente_nombre or '—' }}</div></div>
+        <div style="margin-bottom:10px;"><div style="font-size:11px;color:#adb5bd;">Almacén</div><div>{{ ov.almacen_nombre or '—' }}</div></div>
+        <div style="margin-bottom:10px;"><div style="font-size:11px;color:#adb5bd;">Fecha entrega</div><div>{{ ov.fecha_entrega or '—' }}</div></div>
+        {% if ov.notas %}<div style="margin-bottom:10px;"><div style="font-size:11px;color:#adb5bd;">Notas</div><div style="font-size:13px;color:#6c757d;">{{ ov.notas }}</div></div>{% endif %}
+        <div style="margin-top:12px;padding:12px;border-radius:8px;background:{% if ov.sap_sync_status=='ok' %}#e6f4ea{% elif ov.sap_sync_status=='error' %}#fce8e6{% else %}#f8f9fa{% endif %};">
+          <div style="font-size:11px;color:#adb5bd;margin-bottom:4px;">SAP B1</div>
+          {% if ov.sap_sync_status=='ok' %}<span style="color:#1e7e34;font-weight:600;font-size:13px;"><i class="bi bi-check-circle-fill me-1"></i>SAP · ID: {{ ov.sap_doc_entry }}</span>
+          {% elif ov.sap_sync_status=='error' %}<span style="color:#c5221f;font-size:12.5px;"><i class="bi bi-exclamation-triangle me-1"></i>{{ ov.sap_sync_msg }}</span>
+          {% else %}<span style="color:#adb5bd;">Pendiente</span>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% if get_perms('ventas').get('editar') %}
+    <div class="card mb-3">
+      <div class="card-header">Cambiar estatus</div>
+      <div class="card-body" style="padding:14px;">
+        <form method="POST" action="{{ url_for('actualizar_estatus_venta',ov_id=ov.id) }}">
+          <select class="form-select form-select-sm mb-2" name="estatus">
+            {% for e in estatus_ov %}<option value="{{ e }}" {% if ov.estatus==e %}selected{% endif %}>{{ e|capitalize }}</option>{% endfor %}
+          </select>
+          <button type="submit" class="btn btn-primary btn-sm w-100">Guardar</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+    <div class="card">
+      <div class="card-header">Resumen</div>
+      <div class="card-body" style="padding:14px 16px;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;"><span style="color:#6c757d;">Subtotal</span><span>$ {{ "%.2f"|format(ov.subtotal or 0) }}</span></div>
+        {% if ov.descuento_monto and ov.descuento_monto > 0 %}<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;"><span style="color:#6c757d;">Descuento</span><span style="color:#c5221f;">-$ {{ "%.2f"|format(ov.descuento_monto) }}</span></div>{% endif %}
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;"><span style="color:#6c757d;">IVA 16%</span><span>$ {{ "%.2f"|format(ov.impuesto or 0) }}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;border-top:2px solid #714B67;padding-top:10px;color:#714B67;"><span>TOTAL</span><span>$ {{ "%.2f"|format(ov.total or 0) }}</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-list me-1" style="color:#714B67;"></i>Artículos</div>
+      <div class="table-responsive">
+        <table class="table" style="font-size:13px;">
+          <thead><tr><th>Código</th><th>Artículo</th><th>UM</th><th style="text-align:right;">Cant.</th><th style="text-align:right;">Precio</th><th style="text-align:right;">Desc%</th><th style="text-align:right;">Subtotal</th></tr></thead>
+          <tbody>{% for it in items %}
+          <tr><td style="font-family:monospace;font-size:12px;color:#714B67;">{{ it.item_code }}</td><td>{{ it.item_nombre }}</td>
+          <td style="color:#6c757d;">{{ it.uom or '—' }}</td><td style="text-align:right;">{{ it.cantidad }}</td>
+          <td style="text-align:right;">$ {{ "%.2f"|format(it.precio_unitario or 0) }}</td>
+          <td style="text-align:right;">{% if it.descuento %}{{ it.descuento }}%{% else %}—{% endif %}</td>
+          <td style="text-align:right;font-weight:600;">$ {{ "%.2f"|format(it.subtotal or 0) }}</td></tr>
+          {% endfor %}</tbody>
+        </table>
+      </div>
+    </div>
+    {% if remisiones %}
+    <div class="card">
+      <div class="card-header"><i class="bi bi-truck me-1" style="color:#714B67;"></i>Remisiones</div>
+      {% for r in remisiones %}
+      <div style="padding:12px 16px;border-bottom:1px solid #f0f1f3;display:flex;justify-content:space-between;align-items:center;font-size:13px;">
+        <div>
+          <div style="font-family:monospace;color:#714B67;font-weight:600;">{{ r.folio }}</div>
+          <div style="font-size:12px;color:#6c757d;">{{ r.fecha_entrega[:10] if r.fecha_entrega else '—' }} · {{ r.creador or '—' }}</div>
+          {% if r.sap_sync_status=='ok' %}<div style="font-size:11.5px;color:#1e7e34;"><i class="bi bi-check-circle-fill me-1"></i>SAP: {{ r.sap_doc_entry }}</div>
+          {% elif r.sap_sync_status=='error' %}<div style="font-size:11.5px;color:#c5221f;"><i class="bi bi-exclamation-triangle me-1"></i>{{ r.sap_sync_msg }}</div>{% endif %}
+        </div>
+        <a href="{{ url_for('remision_pdf',rem_id=r.id) }}" target="_blank" class="btn btn-sm btn-outline-danger"><i class="bi bi-file-pdf"></i> PDF</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if get_perms('ventas').get('crear') and ov.estatus in ['borrador','confirmada','en proceso'] %}
+<div class="modal fade" id="modalRemision" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-truck me-2" style="color:#714B67;"></i>Crear remisión</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="form-rem" method="POST" action="{{ url_for('crear_remision',ov_id=ov.id) }}">
+          <input type="hidden" name="items_json" id="rem-items-json">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6"><label class="form-label">Almacén salida</label>
+              <select class="form-select" name="almacen_id">
+                {% for a in almacenes %}<option value="{{ a.id }}" {% if ov.almacen_id==a.id %}selected{% endif %}>{{ a.nombre }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-6"><label class="form-label">Notas</label>
+              <input class="form-control" name="notas" placeholder="Observaciones de entrega"></div>
+          </div>
+          <table class="table" style="font-size:13px;">
+            <thead><tr><th>Código</th><th>Artículo</th><th style="text-align:right;">Pedido</th><th style="width:120px;">A surtir</th><th>Serie/Lote</th></tr></thead>
+            <tbody>
+              {% for it in items %}
+              <tr>
+                <td style="font-family:monospace;font-size:12px;color:#714B67;">{{ it.item_code }}</td>
+                <td>{{ it.item_nombre }}</td>
+                <td style="text-align:right;">{{ it.cantidad }}</td>
+                <td><input type="number" class="form-control form-control-sm rem-cant" step="any" min="0"
+                    data-codigo="{{ it.item_code }}" data-nombre="{{ it.item_nombre }}"
+                    data-uom="{{ it.uom or '' }}" data-precio="{{ it.precio_unitario }}"
+                    value="{{ it.cantidad }}"></td>
+                <td><input type="text" class="form-control form-control-sm rem-serie" data-codigo="{{ it.item_code }}" placeholder="Serie o lote"></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="guardarRemision()"><i class="bi bi-check-lg me-1"></i>Crear remisión</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+<script>
+function guardarRemision() {
+  const items=[];
+  document.querySelectorAll('.rem-cant').forEach(inp=>{
+    const serie=document.querySelector(`.rem-serie[data-codigo="${inp.dataset.codigo}"]`);
+    items.push({codigo:inp.dataset.codigo,nombre:inp.dataset.nombre,uom:inp.dataset.uom,
+      cantidad:parseFloat(inp.value)||0,precio:parseFloat(inp.dataset.precio),
+      serie:serie?serie.value:'',lote:''});
+  });
+  document.getElementById('rem-items-json').value=JSON.stringify(items);
+  document.getElementById('form-rem').submit();
+}
+</script>
+{% endblock %}

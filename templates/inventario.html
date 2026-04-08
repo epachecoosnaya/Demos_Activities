@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Inventario{% endblock %}
+{% block breadcrumb %}Inventario{% endblock %}
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left"><h1>Inventario</h1><p>Stock por almacén</p></div>
+  {% if get_perms('inventario').get('crear') %}
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalToma">
+    <i class="bi bi-clipboard-check me-1"></i> Nueva toma
+  </button>
+  {% endif %}
+</div>
+
+<!-- FILTROS -->
+<div class="card mb-3">
+  <div class="card-body" style="padding:12px 16px;">
+    <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div style="flex:1;min-width:160px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Buscar artículo</label>
+        <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Código o nombre...">
+      </div>
+      <div style="min-width:160px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Almacén</label>
+        <select class="form-select form-select-sm" name="almacen_id">
+          <option value="">Todos</option>
+          {% for a in almacenes %}<option value="{{ a.id }}" {% if almacen_id==a.id|string %}selected{% endif %}>{{ a.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+        <a href="{{ url_for('inventario') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- STOCK PORTAL -->
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-boxes me-1" style="color:#714B67;"></i> Stock portal</div>
+      {% if stock %}
+      <div class="table-responsive">
+        <table class="table" style="font-size:13px;">
+          <thead><tr><th>Código</th><th>Artículo</th><th>Almacén</th><th>UM</th><th style="text-align:right;">Stock</th><th style="text-align:right;">Mín</th><th></th></tr></thead>
+          <tbody>
+            {% for s in stock %}
+            <tr style="{% if s.stock_actual <= s.stock_minimo and s.stock_minimo > 0 %}background:#fce8e6;{% endif %}">
+              <td style="font-family:monospace;font-size:12px;color:#714B67;font-weight:600;">{{ s.codigo }}</td>
+              <td>{{ s.nombre }}</td>
+              <td style="font-size:12px;color:#6c757d;">{{ s.almacen_nombre }}</td>
+              <td style="font-size:12px;color:#6c757d;">{{ s.uom or '—' }}</td>
+              <td style="text-align:right;font-weight:700;{% if s.stock_actual <= s.stock_minimo and s.stock_minimo > 0 %}color:#c5221f;{% else %}color:#1e7e34;{% endif %}">{{ s.stock_actual }}</td>
+              <td style="text-align:right;color:#adb5bd;">{{ s.stock_minimo or '—' }}</td>
+              <td>{% if s.stock_actual <= s.stock_minimo and s.stock_minimo > 0 %}<span style="font-size:10px;background:#fce8e6;color:#c5221f;border-radius:20px;padding:2px 7px;">Bajo</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="padding:40px;text-align:center;color:#adb5bd;">Sin stock registrado aún</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- PANEL DERECHO -->
+  <div class="col-md-4">
+    <!-- SAP Stock -->
+    {% if sap_stock %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-database me-1" style="color:#1a56db;"></i> Stock SAP</div>
+      <div style="max-height:300px;overflow-y:auto;">
+        {% for s in sap_stock %}
+        <div style="padding:10px 14px;border-bottom:1px solid #f0f1f3;font-size:12.5px;">
+          <div style="font-family:monospace;font-size:11px;color:#1a56db;font-weight:600;">{{ s.item_code }}</div>
+          <div style="font-weight:500;">{{ s.item_name }}</div>
+          <div style="display:flex;justify-content:space-between;color:#6c757d;margin-top:2px;">
+            <span>{{ s.warehouse_code }}</span>
+            <span style="font-weight:600;color:{% if s.in_stock > 0 %}#1e7e34{% else %}#c5221f{% endif %};">{{ s.in_stock }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- TOMAS RECIENTES -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-clipboard-check me-1" style="color:#714B67;"></i> Tomas de inventario</div>
+      {% if tomas %}
+      {% for t in tomas %}
+      <div style="padding:10px 14px;border-bottom:1px solid #f0f1f3;font-size:12.5px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <a href="{{ url_for('detalle_toma',toma_id=t.id) }}" style="font-family:monospace;color:#714B67;font-weight:600;">{{ t.folio }}</a>
+          <span style="background:{% if t.estatus=='cerrada' %}#e6f4ea{% else %}#fff3e0{% endif %};color:{% if t.estatus=='cerrada' %}#1e7e34{% else %}#e65100{% endif %};border-radius:20px;padding:2px 8px;font-size:10px;">{{ t.estatus|capitalize }}</span>
+        </div>
+        <div style="color:#6c757d;font-size:12px;">{{ t.almacen_nombre }} · {{ t.fecha_creacion[:10] if t.fecha_creacion else '—' }}</div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div style="padding:20px;text-align:center;color:#adb5bd;font-size:13px;">Sin tomas aún</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if get_perms('inventario').get('crear') %}
+<div class="modal fade" id="modalToma" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Nueva toma de inventario</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="form-toma" method="POST" action="{{ url_for('crear_toma') }}">
+          <div class="mb-3"><label class="form-label">Almacén <span class="text-danger">*</span></label>
+            <select class="form-select" name="almacen_id" required>
+              <option value="">— Seleccionar —</option>
+              {% for a in almacenes %}<option value="{{ a.id }}">{{ a.nombre }}</option>{% endfor %}
+            </select></div>
+          <div class="mb-3"><label class="form-label">Observaciones</label>
+            <textarea class="form-control" name="observaciones" rows="2"></textarea></div>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" form="form-toma" class="btn btn-primary">Iniciar toma</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

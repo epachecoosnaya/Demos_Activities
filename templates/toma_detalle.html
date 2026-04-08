@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}{{ toma.folio }}{% endblock %}
+{% block breadcrumb %}Inventario / {{ toma.folio }}{% endblock %}
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <h1 style="font-family:monospace;">{{ toma.folio }}</h1>
+    <p>{{ toma.almacen_nombre }} · {{ toma.estatus|capitalize }}</p>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <a href="{{ url_for('inventario') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Volver</a>
+    {% if toma.estatus == 'borrador' %}
+    <button class="btn btn-primary btn-sm" onclick="guardarToma('guardar')"><i class="bi bi-save me-1"></i>Guardar</button>
+    <button class="btn btn-sm" style="background:#e6f4ea;color:#1e7e34;border:none;" onclick="if(confirm('¿Cerrar toma y actualizar stock?'))guardarToma('cerrar')">
+      <i class="bi bi-check-circle me-1"></i>Cerrar y aplicar
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-list-check me-1" style="color:#714B67;"></i> Líneas de conteo ({{ lineas|length }} artículos)</div>
+  <form id="form-toma">
+    <input type="hidden" name="accion" id="toma-accion" value="guardar">
+    <input type="hidden" name="lineas_json" id="lineas-json">
+  </form>
+  <div class="table-responsive">
+    <table class="table" style="font-size:13px;">
+      <thead><tr>
+        <th>Código</th><th>Artículo</th><th>UM</th>
+        <th style="text-align:right;">Sistema</th>
+        <th style="text-align:right;width:130px;">Contado</th>
+        <th style="text-align:right;">Diferencia</th>
+        <th>Obs.</th>
+      </tr></thead>
+      <tbody>
+        {% for l in lineas %}
+        <tr id="row-{{ l.id }}">
+          <td style="font-family:monospace;font-size:12px;color:#714B67;">{{ l.codigo }}</td>
+          <td>{{ l.nombre }}</td>
+          <td style="color:#6c757d;">{{ l.uom or '—' }}</td>
+          <td style="text-align:right;color:#6c757d;">{{ l.stock_sistema }}</td>
+          <td style="text-align:right;">
+            {% if toma.estatus == 'borrador' %}
+            <input type="number" class="form-control form-control-sm contado-input" step="any" min="0"
+                   value="{{ l.stock_contado }}" style="width:110px;text-align:right;"
+                   data-id="{{ l.id }}" data-sistema="{{ l.stock_sistema }}"
+                   oninput="calcDiff(this)">
+            {% else %}{{ l.stock_contado }}{% endif %}
+          </td>
+          <td style="text-align:right;" id="diff-{{ l.id }}">
+            {% set diff = l.stock_contado - l.stock_sistema %}
+            <span style="color:{% if diff > 0 %}#1e7e34{% elif diff < 0 %}#c5221f{% else %}#6c757d{% endif %};font-weight:600;">
+              {% if diff > 0 %}+{% endif %}{{ "%.3f"|format(diff) }}
+            </span>
+          </td>
+          <td>
+            {% if toma.estatus == 'borrador' %}
+            <input type="text" class="form-control form-control-sm obs-input" data-id="{{ l.id }}"
+                   value="{{ l.observacion or '' }}" style="width:120px;font-size:12px;">
+            {% else %}{{ l.observacion or '—' }}{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+const lineasData = {};
+document.querySelectorAll('.contado-input').forEach(inp => {
+  lineasData[inp.dataset.id] = {id:inp.dataset.id,sistema:parseFloat(inp.dataset.sistema),contado:parseFloat(inp.value),obs:''};
+});
+document.querySelectorAll('.obs-input').forEach(inp => {
+  if (lineasData[inp.dataset.id]) lineasData[inp.dataset.id].obs = inp.value;
+});
+
+function calcDiff(inp) {
+  const id = inp.dataset.id;
+  const sistema = parseFloat(inp.dataset.sistema);
+  const contado = parseFloat(inp.value)||0;
+  const diff = contado - sistema;
+  lineasData[id].contado = contado;
+  const el = document.getElementById('diff-'+id);
+  el.innerHTML = `<span style="color:${diff>0?'#1e7e34':diff<0?'#c5221f':'#6c757d'};font-weight:600;">${diff>0?'+':''}${diff.toFixed(3)}</span>`;
+}
+
+document.querySelectorAll('.obs-input').forEach(inp => {
+  inp.addEventListener('input', function() {
+    if (lineasData[this.dataset.id]) lineasData[this.dataset.id].obs = this.value;
+  });
+});
+
+function guardarToma(accion) {
+  document.getElementById('toma-accion').value = accion;
+  document.getElementById('lineas-json').value = JSON.stringify(Object.values(lineasData));
+  document.getElementById('form-toma').action = '{{ url_for("guardar_toma", toma_id=toma.id) }}';
+  document.getElementById('form-toma').method = 'POST';
+  document.getElementById('form-toma').submit();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Artículos{% endblock %}
+{% block breadcrumb %}Artículos{% endblock %}
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left"><h1>Artículos</h1><p>{{ total }} registros</p></div>
+  {% if get_perms('articulos').get('crear') %}
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+    <i class="bi bi-plus-lg me-1"></i> Nuevo artículo
+  </button>
+  {% endif %}
+</div>
+
+<!-- FILTROS -->
+<div class="card mb-3">
+  <div class="card-body" style="padding:12px 16px;">
+    <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div style="flex:1;min-width:160px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Buscar</label>
+        <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Código o nombre...">
+      </div>
+      <div style="min-width:130px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Grupo</label>
+        <select class="form-select form-select-sm" name="grupo">
+          <option value="">Todos</option>
+          {% for g in grupos %}<option value="{{ g }}" {% if fil_grupo==g %}selected{% endif %}>{{ g }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="min-width:120px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Fuente</label>
+        <select class="form-select form-select-sm" name="fuente">
+          <option value="">Todas</option>
+          <option value="portal" {% if fil_fuente=='portal' %}selected{% endif %}>Portal</option>
+          <option value="SAP" {% if fil_fuente=='SAP' %}selected{% endif %}>SAP</option>
+        </select>
+      </div>
+      <div style="min-width:90px;">
+        <label class="form-label" style="font-size:11px;margin-bottom:3px;">Mostrar</label>
+        <select class="form-select form-select-sm" name="per_page" onchange="this.form.submit()">
+          <option value="20" {% if per_page==20 %}selected{% endif %}>20</option>
+          <option value="50" {% if per_page==50 %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page==100 %}selected{% endif %}>100</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+        <a href="{{ url_for('articulos') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-box me-1" style="color:#714B67;"></i> Catálogo de artículos</div>
+  {% if articulos %}
+  <div class="table-responsive">
+    <table class="table" style="font-size:13px;">
+      <thead><tr>
+        <th>Código</th><th>Nombre</th><th>Grupo</th><th>UM</th>
+        <th style="text-align:right;">P. Compra</th>
+        <th style="text-align:right;">P. Venta</th>
+        <th>Fuente</th>
+      </tr></thead>
+      <tbody>
+        {% for a in articulos %}
+        <tr>
+          <td style="font-family:monospace;font-size:12px;color:#714B67;font-weight:600;">{{ a.codigo }}</td>
+          <td style="font-weight:500;">{{ a.nombre }}</td>
+          <td style="color:#6c757d;font-size:12px;">{{ a.grupo or '—' }}</td>
+          <td style="color:#6c757d;font-size:12px;">{{ a.uom or '—' }}</td>
+          <td style="text-align:right;">{% if a.precio_compra %}$ {{ "%.2f"|format(a.precio_compra|float) }}{% else %}—{% endif %}</td>
+          <td style="text-align:right;font-weight:600;">{% if a.precio %}$ {{ "%.2f"|format(a.precio|float) }}{% elif a.precio_venta %}$ {{ "%.2f"|format(a.precio_venta|float) }}{% else %}—{% endif %}</td>
+          <td><span style="background:{% if a.fuente=='SAP' %}#e8f0fe{% else %}#f0e6f0{% endif %};color:{% if a.fuente=='SAP' %}#1a56db{% else %}#714B67{% endif %};border-radius:20px;padding:2px 8px;font-size:10px;font-weight:600;">{{ a.fuente }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <!-- PAGINACIÓN -->
+  {% if total_pages > 1 %}
+  <div style="padding:14px 18px;border-top:1px solid #f0f1f3;display:flex;align-items:center;justify-content:space-between;font-size:13px;">
+    <div style="color:#6c757d;">{{ ((page-1)*per_page+1) }}–{{ [page*per_page,total]|min }} de {{ total }}</div>
+    <div style="display:flex;gap:4px;">
+      {% if page>1 %}<a href="?q={{ q }}&grupo={{ fil_grupo }}&fuente={{ fil_fuente }}&per_page={{ per_page }}&page={{ page-1 }}" class="btn btn-sm btn-outline-secondary">‹</a>{% endif %}
+      {% for p in range(1,total_pages+1) %}
+        {% if p==page %}<span class="btn btn-sm btn-primary" style="pointer-events:none;">{{ p }}</span>
+        {% elif p<=2 or p>=total_pages-1 or (p>=page-1 and p<=page+1) %}<a href="?q={{ q }}&grupo={{ fil_grupo }}&fuente={{ fil_fuente }}&per_page={{ per_page }}&page={{ p }}" class="btn btn-sm btn-outline-secondary">{{ p }}</a>{% endif %}
+      {% endfor %}
+      {% if page<total_pages %}<a href="?q={{ q }}&grupo={{ fil_grupo }}&fuente={{ fil_fuente }}&per_page={{ per_page }}&page={{ page+1 }}" class="btn btn-sm btn-outline-secondary">›</a>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+  {% else %}
+  <div style="padding:50px;text-align:center;color:#adb5bd;">
+    <i class="bi bi-box" style="font-size:40px;display:block;margin-bottom:12px;"></i>
+    Sin artículos. {% if get_perms('articulos').get('crear') %}<br><button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalNuevo">Crear artículo</button>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if get_perms('articulos').get('crear') %}
+<div class="modal fade" id="modalNuevo" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-box me-2" style="color:#714B67;"></i>Nuevo artículo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="form-art" method="POST" action="{{ url_for('crear_articulo') }}">
+          <div class="row g-3">
+            <div class="col-md-4"><label class="form-label">Código <span class="text-danger">*</span></label>
+              <input class="form-control" name="codigo" style="text-transform:uppercase;" required></div>
+            <div class="col-md-8"><label class="form-label">Nombre <span class="text-danger">*</span></label>
+              <input class="form-control" name="nombre" required></div>
+            <div class="col-12"><label class="form-label">Descripción</label>
+              <textarea class="form-control" name="descripcion" rows="2"></textarea></div>
+            <div class="col-md-4"><label class="form-label">Grupo</label>
+              <input class="form-control" name="grupo" placeholder="Ej: Pisos, Herramienta..."></div>
+            <div class="col-md-4"><label class="form-label">Categoría</label>
+              <input class="form-control" name="categoria"></div>
+            <div class="col-md-4"><label class="form-label">Unidad de medida</label>
+              <input class="form-control" name="uom" placeholder="M2, PZA, KG..."></div>
+            <div class="col-md-4"><label class="form-label">Precio compra</label>
+              <input class="form-control" name="precio_compra" type="number" step="0.01" value="0"></div>
+            <div class="col-md-4"><label class="form-label">Precio venta</label>
+              <input class="form-control" name="precio_venta" type="number" step="0.01" value="0"></div>
+            <div class="col-md-4"><label class="form-label">IVA %</label>
+              <input class="form-control" name="impuesto" type="number" value="16" step="0.01"></div>
+            <div class="col-md-4"><label class="form-label">Maneja serie</label>
+              <select class="form-select" name="manage_serial"><option value="N">No</option><option value="Y">Sí</option></select></div>
+            <div class="col-md-4"><label class="form-label">Maneja lote</label>
+              <select class="form-select" name="manage_batch"><option value="N">No</option><option value="Y">Sí</option></select></div>
+            <div class="col-md-4"><label class="form-label">Código SAP (ItemCode)</label>
+              <input class="form-control" name="item_code_sap" placeholder="Opcional"></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" form="form-art" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Crear</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}Órdenes de Venta{% endblock %}
+{% block breadcrumb %}Ventas{% endblock %}
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left"><h1>Órdenes de Venta</h1><p>{{ ordenes|length }} registros</p></div>
+  {% if get_perms('ventas').get('crear') %}
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNueva">
+    <i class="bi bi-plus-lg me-1"></i> Nueva OV
+  </button>
+  {% endif %}
+</div>
+
+{% if cots_pendientes %}
+<div class="card mb-3" style="border-left:4px solid #714B67;">
+  <div class="card-body" style="padding:12px 16px;">
+    <div style="font-size:12px;font-weight:600;color:#714B67;margin-bottom:8px;">Cotizaciones aceptadas pendientes de OV</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      {% for c in cots_pendientes %}
+      <div style="background:#f0e6f0;border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer;"
+           onclick="cargarDesdeCot({{ c.id }},'{{ c.cliente_nombre }}',{{ c.total }})">
+        <b style="color:#714B67;">{{ c.folio }}</b> · {{ c.cliente_nombre }} · $ {{ "%.2f"|format(c.total) }}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- FILTROS -->
+<div class="card mb-3"><div class="card-body" style="padding:12px 16px;">
+  <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+    <div style="flex:1;min-width:160px;"><label class="form-label" style="font-size:11px;margin-bottom:3px;">Buscar</label>
+      <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Folio o cliente..."></div>
+    <div style="min-width:140px;"><label class="form-label" style="font-size:11px;margin-bottom:3px;">Estatus</label>
+      <select class="form-select form-select-sm" name="estatus">
+        <option value="">Todos</option>
+        {% for e in estatus_ov %}<option value="{{ e }}" {% if fil_est==e %}selected{% endif %}>{{ e|capitalize }}</option>{% endfor %}
+      </select></div>
+    <div style="display:flex;gap:6px;">
+      <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+      <a href="{{ url_for('ventas') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+    </div>
+  </form>
+</div></div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-bag me-1" style="color:#714B67;"></i>Órdenes de venta</div>
+  {% if ordenes %}
+  <div class="table-responsive">
+    <table class="table" style="font-size:13px;">
+      <thead><tr><th>Folio</th><th>Cliente</th><th>Almacén</th><th>Estatus</th><th>SAP</th><th style="text-align:right;">Total</th><th>Fecha</th><th></th></tr></thead>
+      <tbody>
+        {% set col_est={"borrador":"#f8f9fa","confirmada":"#e8f0fe","en proceso":"#fff3e0","surtida":"#e6f4ea","cancelada":"#fce8e6"} %}
+        {% set txt_est={"borrador":"#6c757d","confirmada":"#1a56db","en proceso":"#e65100","surtida":"#1e7e34","cancelada":"#c5221f"} %}
+        {% for o in ordenes %}
+        <tr>
+          <td style="font-family:monospace;color:#714B67;font-weight:600;">{{ o.folio }}</td>
+          <td style="font-weight:500;">{{ o.cliente_nombre or '—' }}</td>
+          <td style="font-size:12px;color:#6c757d;">{{ o.almacen_nombre or '—' }}</td>
+          <td><span style="background:{{ col_est.get(o.estatus,'#f8f9fa') }};color:{{ txt_est.get(o.estatus,'#6c757d') }};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;">{{ o.estatus|capitalize }}</span></td>
+          <td>{% if o.sap_sync_status=='ok' %}<i class="bi bi-check-circle-fill" style="color:#1e7e34;"></i>
+            {% elif o.sap_sync_status=='error' %}<i class="bi bi-exclamation-triangle-fill" style="color:#c5221f;"></i>
+            {% else %}<i class="bi bi-clock" style="color:#adb5bd;"></i>{% endif %}</td>
+          <td style="text-align:right;font-weight:600;">$ {{ "%.2f"|format(o.total or 0) }}</td>
+          <td style="font-size:12px;color:#adb5bd;">{{ o.fecha_creacion[:10] if o.fecha_creacion else '—' }}</td>
+          <td><a href="{{ url_for('detalle_venta',ov_id=o.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:50px;text-align:center;color:#adb5bd;">
+    <i class="bi bi-bag" style="font-size:40px;display:block;margin-bottom:12px;"></i>Sin órdenes de venta.
+  </div>
+  {% endif %}
+</div>
+
+{% if get_perms('ventas').get('crear') %}
+<div class="modal fade" id="modalNueva" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-bag me-2" style="color:#714B67;"></i>Nueva orden de venta</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="form-ov" method="POST" action="{{ url_for('crear_orden_venta') }}">
+          <input type="hidden" name="items_json" id="ov-items-json">
+          <input type="hidden" name="cotizacion_id" id="ov-cot-id">
+          <div class="row g-3 mb-3">
+            <div class="col-md-5"><label class="form-label">Cliente <span class="text-danger">*</span></label>
+              <div style="position:relative;">
+                <input class="form-control" id="ov-cli-input" placeholder="Buscar cliente..." autocomplete="off" oninput="buscarCliOV(this.value)">
+                <div id="ov-cli-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1px solid #dee2e6;border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:200px;overflow-y:auto;"></div>
+              </div>
+              <input type="hidden" id="ov-cli-id" name="cliente_id">
+              <input type="hidden" id="ov-cli-nombre" name="cliente_nombre">
+            </div>
+            <div class="col-md-4"><label class="form-label">Almacén</label>
+              <select class="form-select" name="almacen_id">
+                <option value="">— Seleccionar —</option>
+                {% for a in almacenes %}<option value="{{ a.id }}">{{ a.nombre }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-3"><label class="form-label">Fecha entrega</label>
+              <input class="form-control" name="fecha_entrega" type="date"></div>
+          </div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin-bottom:8px;">Artículos</div>
+          <div style="position:relative;margin-bottom:10px;">
+            <input class="form-control" id="ov-item-input" placeholder="Buscar artículo..." autocomplete="off" oninput="buscarItemOV(this.value)">
+            <div id="ov-item-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1px solid #dee2e6;border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:240px;overflow-y:auto;"></div>
+          </div>
+          <div class="table-responsive">
+            <table class="table" style="font-size:13px;">
+              <thead><tr><th>Código</th><th>Artículo</th><th>UM</th><th style="width:90px;">Cant.</th><th style="width:120px;">Precio</th><th style="width:80px;">Desc%</th><th style="text-align:right;width:110px;">Subtotal</th><th style="width:40px;"></th></tr></thead>
+              <tbody id="ov-items-tbody"><tr id="ov-row-vacio"><td colspan="8" style="text-align:center;color:#adb5bd;padding:20px;">Busca artículos arriba</td></tr></tbody>
+              <tfoot>
+                <tr><td colspan="6" style="text-align:right;color:#6c757d;">Subtotal:</td><td style="text-align:right;font-weight:600;" id="ov-subtotal">$ 0.00</td><td></td></tr>
+                <tr><td colspan="6" style="text-align:right;color:#6c757d;">IVA 16%:</td><td style="text-align:right;" id="ov-iva">$ 0.00</td><td></td></tr>
+                <tr style="border-top:2px solid #714B67;"><td colspan="6" style="text-align:right;font-weight:700;font-size:15px;">TOTAL:</td><td style="text-align:right;font-weight:700;font-size:15px;color:#714B67;" id="ov-total">$ 0.00</td><td></td></tr>
+              </tfoot>
+            </table>
+          </div>
+          <div class="row g-3 mt-1">
+            <div class="col-12"><label class="form-label">Notas</label>
+              <textarea class="form-control" name="notas" rows="2"></textarea></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="guardarOV()"><i class="bi bi-check-lg me-1"></i>Crear OV</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+<script>
+let ovItems=[];
+let _cliOVTimer=null,_ovItemTimer=null;
+
+function buscarCliOV(q) {
+  clearTimeout(_cliOVTimer); const dd=document.getElementById('ov-cli-dd');
+  if(!q){dd.style.display='none';return;}
+  _cliOVTimer=setTimeout(async()=>{
+    const res=await fetch('/clientes/buscar?q='+encodeURIComponent(q));
+    const data=await res.json(); window._ovCliList=data;
+    if(!data.length){dd.innerHTML='<div style="padding:10px;color:#adb5bd;text-align:center;">Sin resultados</div>';dd.style.display='block';return;}
+    dd.innerHTML=data.map((c,i)=>`<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid #f0f1f3;" onmouseover="this.style.background='#f8f9fb'" onmouseout="this.style.background=''"
+      onmousedown="event.preventDefault();document.getElementById('ov-cli-id').value=window._ovCliList[${i}].id||'';document.getElementById('ov-cli-nombre').value=window._ovCliList[${i}].nombre;document.getElementById('ov-cli-input').value=window._ovCliList[${i}].nombre;document.getElementById('ov-cli-dd').style.display='none';">
+      <b style="font-size:13px;">${c.nombre}</b><br><span style="font-size:11.5px;color:#6c757d;">${c.empresa||''}</span></div>`).join('');
+    dd.style.display='block';
+  },200);
+}
+
+function buscarItemOV(q) {
+  clearTimeout(_ovItemTimer); const dd=document.getElementById('ov-item-dd');
+  if(!q){dd.style.display='none';return;}
+  _ovItemTimer=setTimeout(async()=>{
+    const res=await fetch('/articulos/buscar-unificado?q='+encodeURIComponent(q));
+    const data=await res.json(); window._ovItemList=data;
+    if(!data.length){dd.innerHTML='<div style="padding:10px;color:#adb5bd;text-align:center;">Sin artículos</div>';dd.style.display='block';return;}
+    dd.innerHTML=data.map((it,i)=>`<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid #f0f1f3;" onmouseover="this.style.background='#f8f9fb'" onmouseout="this.style.background=''"
+      onmousedown="event.preventDefault();agregarItemOV(window._ovItemList[${i}])">
+      <div style="font-family:monospace;font-size:12px;color:#714B67;font-weight:600;">${it.codigo}</div>
+      <div style="font-size:13px;">${it.nombre} · ${it.uom||''}</div>
+      <div style="font-size:11.5px;color:#6c757d;"><b>$ ${it.precio.toFixed(2)}</b></div>
+    </div>`).join('');
+    dd.style.display='block';
+  },200);
+}
+
+function agregarItemOV(it) {
+  document.getElementById('ov-item-input').value='';
+  document.getElementById('ov-item-dd').style.display='none';
+  const ex=ovItems.find(i=>i.codigo===it.codigo);
+  if(ex){ex.cantidad++;renderOVItems();return;}
+  ovItems.push({codigo:it.codigo,nombre:it.nombre,uom:it.uom||'',cantidad:1,precio_unitario:it.precio||0,descuento:0});
+  renderOVItems();
+}
+
+function renderOVItems() {
+  const tbody=document.getElementById('ov-items-tbody');
+  document.getElementById('ov-row-vacio').style.display=ovItems.length?'none':'';
+  tbody.querySelectorAll('tr.ov-item-row').forEach(r=>r.remove());
+  let sub=0;
+  ovItems.forEach((it,i)=>{
+    const s=it.cantidad*it.precio_unitario*(1-it.descuento/100); sub+=s;
+    const tr=document.createElement('tr'); tr.className='ov-item-row';
+    tr.innerHTML=`<td style="font-family:monospace;font-size:12px;color:#714B67;">${it.codigo}</td>
+      <td>${it.nombre}</td><td style="color:#6c757d;">${it.uom}</td>
+      <td><input type="number" class="form-control form-control-sm" value="${it.cantidad}" min="0.001" step="any" oninput="ovItems[${i}].cantidad=parseFloat(this.value)||0;renderOVItems();" style="width:80px;"></td>
+      <td><input type="number" class="form-control form-control-sm" value="${it.precio_unitario}" min="0" step="0.01" oninput="ovItems[${i}].precio_unitario=parseFloat(this.value)||0;renderOVItems();" style="width:110px;"></td>
+      <td><input type="number" class="form-control form-control-sm" value="${it.descuento}" min="0" max="100" step="0.01" oninput="ovItems[${i}].descuento=parseFloat(this.value)||0;renderOVItems();" style="width:70px;"></td>
+      <td style="text-align:right;font-weight:600;">$ ${s.toFixed(2)}</td>
+      <td><button type="button" class="btn btn-sm" style="background:#fce8e6;color:#c5221f;border:none;" onclick="ovItems.splice(${i},1);renderOVItems();"><i class="bi bi-trash"></i></button></td>`;
+    tbody.appendChild(tr);
+  });
+  const iva=sub*0.16; const tot=sub+iva;
+  document.getElementById('ov-subtotal').textContent='$ '+sub.toFixed(2);
+  document.getElementById('ov-iva').textContent='$ '+iva.toFixed(2);
+  document.getElementById('ov-total').textContent='$ '+tot.toFixed(2);
+}
+
+function guardarOV() {
+  if(!document.getElementById('ov-cli-nombre').value){alert('Selecciona un cliente');return;}
+  if(!ovItems.length){alert('Agrega al menos un artículo');return;}
+  document.getElementById('ov-items-json').value=JSON.stringify(ovItems);
+  document.getElementById('form-ov').submit();
+}
+
+function cargarDesdeCot(cotId,clienteNombre,total) {
+  document.getElementById('ov-cot-id').value=cotId;
+  document.getElementById('ov-cli-nombre').value=clienteNombre;
+  document.getElementById('ov-cli-input').value=clienteNombre;
+  new bootstrap.Modal(document.getElementById('modalNueva')).show();
+}
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#ov-cli-input')&&!e.target.closest('#ov-cli-dd')) document.getElementById('ov-cli-dd').style.display='none';
+  if(!e.target.closest('#ov-item-input')&&!e.target.closest('#ov-item-dd')) document.getElementById('ov-item-dd').style.display='none';
+});
+</script>
+{% endblock %}

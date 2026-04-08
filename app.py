@@ -40,7 +40,7 @@ PERMISOS_ROL = {
     "vendedor":   {"ver":True,  "crear":True,  "editar":False, "eliminar":False},
 }
 
-MODULOS = ["visitas","calendario","clientes","servicios","cotizaciones","usuarios","reportes","configuracion","permisos"]
+MODULOS = ["visitas","calendario","clientes","servicios","cotizaciones","almacenes","articulos","inventario","compras","ventas","usuarios","reportes","configuracion","permisos"]
 
 def get_permisos_usuario(uid, modulo):
     """Obtiene permisos de un usuario para un módulo. Admin siempre tiene todo."""
@@ -1559,3 +1559,786 @@ def error_500(e):
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+# ══════════════════════════════════════════════════════════
+# ── ALMACENES ─────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════
+TIPOS_ALMACEN = ["general","materia prima","producto terminado","herramienta","tránsito"]
+
+@app.route("/almacenes")
+def almacenes():
+    if not logged_in(): return redirect(url_for("login"))
+    lista = query("""SELECT a.*,u.nombre AS resp_nombre
+                     FROM almacenes a LEFT JOIN usuarios u ON u.id=a.responsable_id
+                     WHERE a.activo=true ORDER BY a.nombre""", fetchall=True) or []
+    usuarios_list = query("SELECT id,nombre,usuario FROM usuarios WHERE activo=1 ORDER BY nombre",fetchall=True) or []
+    return render_template("almacenes.html", empresa=EMPRESA, logo=LOGO,
+                           almacenes=lista, usuarios=usuarios_list, tipos=TIPOS_ALMACEN)
+
+@app.route("/almacenes/crear", methods=["POST"])
+def crear_almacen():
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("crear","almacenes"): abort(403)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    codigo = request.form.get("codigo","").strip().upper()
+    nombre = request.form.get("nombre","").strip()
+    if not codigo or not nombre:
+        flash("Código y nombre son obligatorios.","danger"); return redirect(url_for("almacenes"))
+    try:
+        query("""INSERT INTO almacenes (codigo,nombre,descripcion,ubicacion,responsable_id,tipo,activo,fuente,fecha_creacion,fecha_actualizacion)
+                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+              (codigo,nombre,
+               request.form.get("descripcion","").strip(),
+               request.form.get("ubicacion","").strip(),
+               request.form.get("responsable_id") or None,
+               request.form.get("tipo","general"),
+               True,"portal",now,now), commit=True)
+        flash(f"Almacén {codigo} creado ✅","success")
+    except Exception as e:
+        flash(f"Error: {e}","danger")
+    return redirect(url_for("almacenes"))
+
+@app.route("/almacenes/editar/<int:almacen_id>", methods=["POST"])
+def editar_almacen(almacen_id):
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("editar","almacenes"): abort(403)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    activo = request.form.get("activo","true") == "true"
+    query("""UPDATE almacenes SET nombre=%s,descripcion=%s,ubicacion=%s,
+             responsable_id=%s,tipo=%s,activo=%s,fecha_actualizacion=%s WHERE id=%s""",
+          (request.form.get("nombre","").strip(),
+           request.form.get("descripcion","").strip(),
+           request.form.get("ubicacion","").strip(),
+           request.form.get("responsable_id") or None,
+           request.form.get("tipo","general"),
+           activo,now,almacen_id), commit=True)
+    flash("Almacén actualizado ✅","success")
+    return redirect(url_for("almacenes"))
+
+# ── API Almacenes para dropdowns ──
+@app.route("/almacenes/lista")
+def almacenes_lista():
+    if not logged_in(): return jsonify([])
+    rows = query("SELECT id,codigo,nombre FROM almacenes WHERE activo=true ORDER BY nombre",fetchall=True) or []
+    return jsonify([{"id":r["id"],"codigo":r["codigo"],"nombre":r["nombre"]} for r in rows])
+
+
+# ══════════════════════════════════════════════════════════
+# ── ARTÍCULOS ─────────────────────────════════════════════
+# ══════════════════════════════════════════════════════════
+@app.route("/articulos")
+def articulos():
+    if not logged_in(): return redirect(url_for("login"))
+    q   = request.args.get("q","").strip()
+    grp = request.args.get("grupo","")
+    src = request.args.get("fuente","")
+    page = int(request.args.get("page",1))
+    per_page = int(request.args.get("per_page",50))
+    if per_page not in [20,50,100]: per_page=50
+    offset = (page-1)*per_page
+
+    # Unificar sap_items + articulos propios
+    base_art = """SELECT id,codigo,nombre,grupo,uom,precio_venta AS precio,activo,fuente,'portal' AS origen
+                  FROM articulos WHERE activo=true"""
+    base_sap = """SELECT item_code AS id,item_code AS codigo,item_name AS nombre,
+                  item_group AS grupo,uom,price AS precio,active AS activo,'SAP' AS fuente,'sap' AS origen
+                  FROM sap_items WHERE active=true"""
+    params_art, params_sap = [],[]
+    if q:
+        base_art += " AND (codigo ILIKE %s OR nombre ILIKE %s)"; params_art+=[f"%{q}%",f"%{q}%"]
+        base_sap += " AND (item_code ILIKE %s OR item_name ILIKE %s)"; params_sap+=[f"%{q}%",f"%{q}%"]
+    if grp:
+        base_art += " AND grupo=%s"; params_art.append(grp)
+        base_sap += " AND item_group=%s"; params_sap.append(grp)
+
+    arts = query(base_art,tuple(params_art),fetchall=True) or []
+    saps = []
+    if src != "portal":
+        try: saps = query(base_sap,tuple(params_sap),fetchall=True) or []
+        except: pass
+
+    # Excluir de SAP los que ya están en portal (por item_code_sap)
+    codigos_portal = {a["codigo"] for a in arts}
+    saps_filtrados = [s for s in saps if s["codigo"] not in codigos_portal]
+
+    todos = arts + saps_filtrados
+    total = len(todos)
+    total_pages = max(1,-(-total//per_page))
+    lista = todos[offset:offset+per_page]
+
+    grupos = list(set(a["grupo"] for a in todos if a.get("grupo")))
+    grupos.sort()
+
+    return render_template("articulos.html", empresa=EMPRESA, logo=LOGO,
+                           articulos=lista, grupos=grupos, q=q,
+                           fil_grupo=grp, fil_fuente=src,
+                           page=page, per_page=per_page,
+                           total=total, total_pages=total_pages)
+
+@app.route("/articulos/crear", methods=["POST"])
+def crear_articulo():
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("crear","articulos"): abort(403)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    codigo = request.form.get("codigo","").strip().upper()
+    nombre = request.form.get("nombre","").strip()
+    if not codigo or not nombre:
+        flash("Código y nombre son obligatorios.","danger"); return redirect(url_for("articulos"))
+    try:
+        query("""INSERT INTO articulos (codigo,nombre,descripcion,grupo,categoria,uom,
+                 precio_compra,precio_venta,impuesto,activo,manage_serial,manage_batch,
+                 fuente,item_code_sap,fecha_creacion,fecha_actualizacion)
+                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+              (codigo,nombre,
+               request.form.get("descripcion","").strip(),
+               request.form.get("grupo","").strip(),
+               request.form.get("categoria","").strip(),
+               request.form.get("uom","").strip(),
+               float(request.form.get("precio_compra",0) or 0),
+               float(request.form.get("precio_venta",0) or 0),
+               float(request.form.get("impuesto",16) or 16),
+               True,
+               request.form.get("manage_serial","N"),
+               request.form.get("manage_batch","N"),
+               "portal",
+               request.form.get("item_code_sap","").strip(),
+               now,now), commit=True)
+        flash(f"Artículo {codigo} creado ✅","success")
+    except Exception as e:
+        flash(f"Error: {e}","danger")
+    return redirect(url_for("articulos"))
+
+@app.route("/articulos/buscar-unificado")
+def buscar_articulos_unificado():
+    """Busca en articulos portal + sap_items para autocompletes."""
+    if not logged_in(): return jsonify([])
+    q = request.args.get("q","").strip().replace("*","")
+    if len(q) < 1: return jsonify([])
+    param = f"%{q}%"
+    resultados = []
+    # Portal
+    rows = query("""SELECT codigo,nombre,uom,precio_venta AS precio,'portal' AS fuente
+                    FROM articulos WHERE activo=true
+                    AND (codigo ILIKE %s OR nombre ILIKE %s)
+                    ORDER BY nombre LIMIT 8""",(param,param),fetchall=True) or []
+    for r in rows:
+        resultados.append({"codigo":r["codigo"],"nombre":r["nombre"],
+                           "uom":r["uom"] or "","precio":float(r["precio"] or 0),"fuente":"portal"})
+    # SAP
+    codigos_ya = {r["codigo"] for r in resultados}
+    try:
+        sap = query("""SELECT item_code AS codigo,item_name AS nombre,uom,price AS precio,'SAP' AS fuente
+                       FROM sap_items WHERE active=true
+                       AND (item_code ILIKE %s OR item_name ILIKE %s)
+                       ORDER BY item_name LIMIT 8""",(param,param),fetchall=True) or []
+        for r in sap:
+            if r["codigo"] not in codigos_ya:
+                resultados.append({"codigo":r["codigo"],"nombre":r["nombre"],
+                                   "uom":r["uom"] or "","precio":float(r["precio"] or 0),"fuente":"SAP"})
+    except: pass
+    return jsonify(resultados[:10])
+
+
+# ══════════════════════════════════════════════════════════
+# ── INVENTARIO / TOMA DE INVENTARIO ───────────────────────
+# ══════════════════════════════════════════════════════════
+@app.route("/inventario")
+def inventario():
+    if not logged_in(): return redirect(url_for("login"))
+    almacen_id = request.args.get("almacen_id","")
+    q = request.args.get("q","").strip()
+
+    # Stock consolidado
+    base = """SELECT i.*,a.codigo,a.nombre,a.uom,a.grupo,
+              alm.nombre AS almacen_nombre, alm.codigo AS almacen_codigo
+              FROM inventario i
+              JOIN articulos a ON a.id=i.articulo_id
+              JOIN almacenes alm ON alm.id=i.almacen_id
+              WHERE a.activo=true"""
+    params=[]
+    if almacen_id: base+=" AND i.almacen_id=%s"; params.append(almacen_id)
+    if q: base+=" AND (a.codigo ILIKE %s OR a.nombre ILIKE %s)"; params+=[f"%{q}%",f"%{q}%"]
+    base+=" ORDER BY alm.nombre,a.nombre"
+    stock = query(base,tuple(params),fetchall=True) or []
+
+    # También mostrar SAP stock
+    sap_stock=[]
+    if not almacen_id:
+        try:
+            sap_stock = query("""SELECT w.item_code,i.item_name,w.warehouse_code,
+                                 w.warehouse_name,w.in_stock,w.available
+                                 FROM sap_item_warehouse w
+                                 JOIN sap_items i ON i.item_code=w.item_code
+                                 WHERE w.in_stock > 0
+                                 ORDER BY w.item_code LIMIT 100""",fetchall=True) or []
+        except: pass
+
+    tomas = query("""SELECT t.*,alm.nombre AS almacen_nombre
+                     FROM tomas_inventario t JOIN almacenes alm ON alm.id=t.almacen_id
+                     ORDER BY t.fecha_creacion DESC LIMIT 10""",fetchall=True) or []
+    almacenes_list = query("SELECT id,codigo,nombre FROM almacenes WHERE activo=true ORDER BY nombre",fetchall=True) or []
+
+    return render_template("inventario.html", empresa=EMPRESA, logo=LOGO,
+                           stock=stock, sap_stock=sap_stock, tomas=tomas,
+                           almacenes=almacenes_list, almacen_id=almacen_id, q=q)
+
+@app.route("/inventario/toma/crear", methods=["POST"])
+def crear_toma():
+    if not logged_in(): return redirect(url_for("login"))
+    uid=session["user_id"]; now=datetime.now().strftime("%Y-%m-%d %H:%M")
+    almacen_id = request.form.get("almacen_id")
+    count = query("SELECT COUNT(*) AS c FROM tomas_inventario",fetchone=True)["c"]
+    folio = f"INV-{(count+1):04d}"
+    try:
+        # Crear toma
+        row = query("""INSERT INTO tomas_inventario (folio,almacen_id,estatus,observaciones,creado_por,fecha_creacion)
+                       VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
+                    (folio,almacen_id,"borrador",
+                     request.form.get("observaciones","").strip(),uid,now),
+                    fetchone=True, commit=True)
+        toma_id = row["id"]
+        # Precargar con stock actual del almacén
+        stock = query("""SELECT i.id AS articulo_id,i.stock_actual
+                         FROM inventario i WHERE i.almacen_id=%s""",(almacen_id,),fetchall=True) or []
+        for s in stock:
+            query("""INSERT INTO tomas_inventario_lineas
+                     (toma_id,articulo_id,stock_sistema,stock_contado,diferencia)
+                     VALUES (%s,%s,%s,%s,%s)""",
+                  (toma_id,s["articulo_id"],s["stock_actual"],0,0),commit=True)
+        flash(f"Toma {folio} creada ✅","success")
+        return redirect(url_for("detalle_toma",toma_id=toma_id))
+    except Exception as e:
+        flash(f"Error: {e}","danger"); return redirect(url_for("inventario"))
+
+@app.route("/inventario/toma/<int:toma_id>")
+def detalle_toma(toma_id):
+    if not logged_in(): return redirect(url_for("login"))
+    toma = query("""SELECT t.*,alm.nombre AS almacen_nombre FROM tomas_inventario t
+                    JOIN almacenes alm ON alm.id=t.almacen_id WHERE t.id=%s""",(toma_id,),fetchone=True)
+    if not toma: abort(404)
+    lineas = query("""SELECT l.*,a.codigo,a.nombre,a.uom FROM tomas_inventario_lineas l
+                      JOIN articulos a ON a.id=l.articulo_id
+                      WHERE l.toma_id=%s ORDER BY a.nombre""",(toma_id,),fetchall=True) or []
+    return render_template("toma_detalle.html", empresa=EMPRESA, logo=LOGO, toma=toma, lineas=lineas)
+
+@app.route("/inventario/toma/<int:toma_id>/guardar", methods=["POST"])
+def guardar_toma(toma_id):
+    if not logged_in(): return redirect(url_for("login"))
+    accion = request.form.get("accion","guardar")
+    lineas_json = request.form.get("lineas_json","[]")
+    import json as _json
+    try: lineas = _json.loads(lineas_json)
+    except: lineas=[]
+    for l in lineas:
+        contado = float(l.get("contado",0))
+        sistema = float(l.get("sistema",0))
+        diff = contado - sistema
+        query("""UPDATE tomas_inventario_lineas SET stock_contado=%s,diferencia=%s,observacion=%s
+                 WHERE id=%s""",(contado,diff,l.get("obs",""),l.get("id")),commit=True)
+    if accion == "cerrar":
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        # Aplicar diferencias al inventario
+        lineas_db = query("""SELECT l.*,a.id AS art_id FROM tomas_inventario_lineas l
+                             JOIN articulos a ON a.id=l.articulo_id WHERE l.toma_id=%s""",(toma_id,),fetchall=True) or []
+        toma = query("SELECT almacen_id FROM tomas_inventario WHERE id=%s",(toma_id,),fetchone=True)
+        for l in lineas_db:
+            query("""INSERT INTO inventario (articulo_id,almacen_id,stock_actual,ultima_actualizacion)
+                     VALUES (%s,%s,%s,%s)
+                     ON CONFLICT(articulo_id,almacen_id) DO UPDATE
+                     SET stock_actual=%s,ultima_actualizacion=%s""",
+                  (l["art_id"],toma["almacen_id"],l["stock_contado"],now,
+                   l["stock_contado"],now),commit=True)
+        query("UPDATE tomas_inventario SET estatus='cerrada',fecha_cierre=%s WHERE id=%s",
+              (now,toma_id),commit=True)
+        flash("Toma cerrada y stock actualizado ✅","success")
+        return redirect(url_for("inventario"))
+    flash("Conteos guardados","success")
+    return redirect(url_for("detalle_toma",toma_id=toma_id))
+
+
+# ══════════════════════════════════════════════════════════
+# ── ÓRDENES DE COMPRA ─────────────────────────────────────
+# ══════════════════════════════════════════════════════════
+EST_OC = ["borrador","confirmada","recibida parcial","recibida","cancelada"]
+
+def gen_folio_oc():
+    c = query("SELECT COUNT(*) AS c FROM ordenes_compra",fetchone=True)["c"]
+    return f"OC-{(c+1):04d}"
+
+def sap_crear_orden_compra(oc, items):
+    s = sap_login()
+    if not s: return False,"No se pudo conectar a SAP",None
+    try:
+        lines = []
+        for it in items:
+            line = {"ItemCode":it["item_code"],"Quantity":float(it["cantidad"]),
+                    "UnitPrice":float(it["precio_unitario"])}
+            if oc.get("almacen_codigo"): line["WarehouseCode"]=oc["almacen_codigo"]
+            lines.append(line)
+        payload = {"CardCode":oc.get("proveedor_cardcode",""),"DocDueDate":oc.get("fecha_entrega",""),
+                   "DocumentLines":lines}
+        if oc.get("notas"): payload["Comments"]=oc["notas"]
+        r = s.post(f"{SAP_BASE_URL}/PurchaseOrders",json=payload,timeout=20)
+        if r.status_code in [200,201]:
+            de = r.json().get("DocEntry") or r.json().get("DocNum")
+            return True,f"OC creada en SAP (DocEntry:{de})",de
+        msg = r.json().get("error",{}).get("message","Error")
+        return False,f"SAP: {msg}",None
+    except Exception as e:
+        return False,str(e),None
+    finally:
+        sap_logout(s)
+
+@app.route("/compras")
+def compras():
+    if not logged_in(): return redirect(url_for("login"))
+    fil_est = request.args.get("estatus","")
+    q = request.args.get("q","").strip()
+    base = """SELECT oc.*,u.nombre AS creador_nombre,alm.nombre AS almacen_nombre
+              FROM ordenes_compra oc
+              LEFT JOIN usuarios u ON u.id=oc.creado_por
+              LEFT JOIN almacenes alm ON alm.id=oc.almacen_id
+              WHERE 1=1"""
+    params=[]
+    if fil_est: base+=" AND oc.estatus=%s"; params.append(fil_est)
+    if q: base+=" AND (oc.folio ILIKE %s OR oc.proveedor_nombre ILIKE %s)"; params+=[f"%{q}%",f"%{q}%"]
+    base+=" ORDER BY oc.fecha_creacion DESC"
+    lista = query(base,tuple(params),fetchall=True) or []
+    almacenes_list = query("SELECT id,codigo,nombre FROM almacenes WHERE activo=true ORDER BY nombre",fetchall=True) or []
+    return render_template("compras.html", empresa=EMPRESA, logo=LOGO,
+                           ordenes=lista, estatus_oc=EST_OC,
+                           almacenes=almacenes_list, fil_est=fil_est, q=q)
+
+@app.route("/compras/crear", methods=["POST"])
+def crear_orden_compra():
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("crear","compras"): abort(403)
+    uid=session["user_id"]; now=datetime.now().strftime("%Y-%m-%d %H:%M")
+    import json as _json
+    items_raw = request.form.get("items_json","[]")
+    try: items = _json.loads(items_raw)
+    except: items=[]
+    if not items:
+        flash("Agrega al menos un artículo.","danger"); return redirect(url_for("compras"))
+
+    subtotal = sum(float(i["cantidad"])*float(i["precio_unitario"]) for i in items)
+    impuesto = round(subtotal*0.16,2)
+    total    = round(subtotal+impuesto,2)
+    folio    = gen_folio_oc()
+    proveedor_id     = request.form.get("proveedor_id") or None
+    proveedor_nombre = request.form.get("proveedor_nombre","").strip()
+    almacen_id       = request.form.get("almacen_id") or None
+    fecha_entrega    = request.form.get("fecha_entrega","").strip()
+    notas            = request.form.get("notas","").strip()
+
+    try:
+        conn=get_db(); cur=conn.cursor()
+        cur.execute("""INSERT INTO ordenes_compra
+            (folio,proveedor_id,proveedor_nombre,estatus,almacen_id,moneda,subtotal,impuesto,total,
+             notas,fecha_entrega,sap_sync_status,creado_por,fecha_creacion,fecha_actualizacion)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (folio,proveedor_id,proveedor_nombre,"borrador",almacen_id,"MXN",
+             subtotal,impuesto,total,notas,fecha_entrega,"pendiente",uid,now,now))
+        oc_id = cur.fetchone()["id"]
+        for it in items:
+            sub = round(float(it["cantidad"])*float(it["precio_unitario"]),2)
+            cur.execute("""INSERT INTO ordenes_compra_items
+                (orden_id,item_code,item_nombre,uom,cantidad,precio_unitario,subtotal)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                (oc_id,it["codigo"],it["nombre"],it.get("uom",""),
+                 float(it["cantidad"]),float(it["precio_unitario"]),sub))
+        conn.commit(); cur.close(); conn.close()
+
+        # SAP
+        almacen = query("SELECT codigo FROM almacenes WHERE id=%s",(almacen_id,),fetchone=True) if almacen_id else None
+        # Buscar CardCode del proveedor
+        prov_row = query("SELECT notas FROM clientes WHERE id=%s",(proveedor_id,),fetchone=True) if proveedor_id else None
+        card_code=""
+        if prov_row and prov_row.get("notas"):
+            import re
+            m=re.search(r"SAP CardCode:\s*(\S+)",prov_row["notas"] or "")
+            if m: card_code=m.group(1)
+
+        oc_data={"proveedor_cardcode":card_code,"fecha_entrega":fecha_entrega,
+                 "notas":notas,"almacen_codigo":almacen["codigo"] if almacen else ""}
+        sap_ok,sap_msg,sap_de = sap_crear_orden_compra(oc_data,items)
+        sap_st = "ok" if sap_ok else "error"
+        query("UPDATE ordenes_compra SET sap_doc_entry=%s,sap_sync_status=%s,sap_sync_msg=%s WHERE id=%s",
+              (sap_de,sap_st,sap_msg,oc_id),commit=True)
+
+        if sap_ok: flash(f"OC {folio} creada ✅ SAP ID:{sap_de}","success")
+        else: flash(f"OC {folio} guardada en portal ⚠ SAP: {sap_msg}","warning")
+        return redirect(url_for("detalle_compra",oc_id=oc_id))
+    except Exception as e:
+        flash(f"Error: {e}","danger"); return redirect(url_for("compras"))
+
+@app.route("/compras/<int:oc_id>")
+def detalle_compra(oc_id):
+    if not logged_in(): return redirect(url_for("login"))
+    oc = query("""SELECT oc.*,u.nombre AS creador_nombre,alm.nombre AS almacen_nombre,alm.codigo AS almacen_codigo
+                  FROM ordenes_compra oc
+                  LEFT JOIN usuarios u ON u.id=oc.creado_por
+                  LEFT JOIN almacenes alm ON alm.id=oc.almacen_id
+                  WHERE oc.id=%s""",(oc_id,),fetchone=True)
+    if not oc: abort(404)
+    items = query("SELECT * FROM ordenes_compra_items WHERE orden_id=%s ORDER BY id",(oc_id,),fetchall=True) or []
+    entradas = query("""SELECT e.*,u.nombre AS creador FROM entradas_mercancia e
+                        LEFT JOIN usuarios u ON u.id=e.creado_por
+                        WHERE e.orden_compra_id=%s ORDER BY e.fecha_creacion DESC""",(oc_id,),fetchall=True) or []
+    almacenes_list = query("SELECT id,codigo,nombre FROM almacenes WHERE activo=true ORDER BY nombre",fetchall=True) or []
+    return render_template("compra_detalle.html", empresa=EMPRESA, logo=LOGO,
+                           oc=oc, items=items, entradas=entradas,
+                           almacenes=almacenes_list, estatus_oc=EST_OC)
+
+@app.route("/compras/<int:oc_id>/estatus", methods=["POST"])
+def actualizar_estatus_compra(oc_id):
+    if not logged_in(): return redirect(url_for("login"))
+    nuevo = request.form.get("estatus","borrador")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    query("UPDATE ordenes_compra SET estatus=%s,fecha_actualizacion=%s WHERE id=%s",(nuevo,now,oc_id),commit=True)
+    flash("Estatus actualizado","success")
+    return redirect(url_for("detalle_compra",oc_id=oc_id))
+
+
+# ══════════════════════════════════════════════════════════
+# ── ENTRADAS DE MERCANCÍA ─────────────────────────────────
+# ══════════════════════════════════════════════════════════
+def gen_folio_entrada():
+    c = query("SELECT COUNT(*) AS c FROM entradas_mercancia",fetchone=True)["c"]
+    return f"ENT-{(c+1):04d}"
+
+def sap_crear_goods_receipt(entrada, items):
+    """Crea un GoodsReceipt (entrada de mercancía) en SAP via PurchaseDeliveryNotes."""
+    s = sap_login()
+    if not s: return False,"No se pudo conectar a SAP",None
+    try:
+        lines=[]
+        for it in items:
+            line={"ItemCode":it["item_code"],"Quantity":float(it["cantidad_recibida"]),
+                  "UnitPrice":float(it["precio_unitario"] or 0)}
+            if entrada.get("almacen_codigo"): line["WarehouseCode"]=entrada["almacen_codigo"]
+            if it.get("numero_serie"): line["SerialNumbers"]=[{"ManufacturerSerialNumber":it["numero_serie"]}]
+            lines.append(line)
+        payload={"DocDate":datetime.now().strftime("%Y-%m-%d"),"DocumentLines":lines}
+        if entrada.get("sap_oc_entry"): payload["BaseType"]=22; payload["BaseEntry"]=entrada["sap_oc_entry"]
+        r = s.post(f"{SAP_BASE_URL}/PurchaseDeliveryNotes",json=payload,timeout=20)
+        if r.status_code in [200,201]:
+            de=r.json().get("DocEntry") or r.json().get("DocNum")
+            return True,f"Entrada registrada en SAP (DocEntry:{de})",de
+        msg=r.json().get("error",{}).get("message","Error")
+        return False,f"SAP: {msg}",None
+    except Exception as e: return False,str(e),None
+    finally: sap_logout(s)
+
+@app.route("/compras/<int:oc_id>/entrada/crear", methods=["POST"])
+def crear_entrada(oc_id):
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("crear","compras"): abort(403)
+    uid=session["user_id"]; now=datetime.now().strftime("%Y-%m-%d %H:%M")
+    import json as _json
+    items_raw=request.form.get("items_json","[]")
+    try: items=_json.loads(items_raw)
+    except: items=[]
+
+    oc = query("SELECT * FROM ordenes_compra WHERE id=%s",(oc_id,),fetchone=True)
+    if not oc: abort(404)
+    almacen_id = request.form.get("almacen_id") or oc.get("almacen_id")
+    folio = gen_folio_entrada()
+
+    try:
+        conn=get_db(); cur=conn.cursor()
+        cur.execute("""INSERT INTO entradas_mercancia
+            (folio,orden_compra_id,almacen_id,estatus,notas,sap_sync_status,
+             creado_por,fecha_creacion,fecha_recepcion)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (folio,oc_id,almacen_id,"recibida",
+             request.form.get("notas","").strip(),
+             "pendiente",uid,now,now))
+        ent_id=cur.fetchone()["id"]
+        for it in items:
+            recibido=float(it.get("recibido",0))
+            cur.execute("""INSERT INTO entradas_mercancia_items
+                (entrada_id,item_code,item_nombre,uom,cantidad_pedida,cantidad_recibida,precio_unitario,numero_serie,numero_lote)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (ent_id,it["codigo"],it["nombre"],it.get("uom",""),
+                 float(it.get("pedido",0)),recibido,
+                 float(it.get("precio",0)),it.get("serie",""),it.get("lote","")))
+            # Actualizar stock
+            if almacen_id and recibido>0:
+                art=query("SELECT id FROM articulos WHERE codigo=%s",(it["codigo"],),fetchone=True)
+                if art:
+                    cur.execute("""INSERT INTO inventario (articulo_id,almacen_id,stock_actual,ultima_actualizacion)
+                                   VALUES (%s,%s,%s,%s)
+                                   ON CONFLICT(articulo_id,almacen_id) DO UPDATE
+                                   SET stock_actual=inventario.stock_actual+%s,ultima_actualizacion=%s""",
+                                (art["id"],almacen_id,recibido,now,recibido,now))
+        # Actualizar estatus OC
+        cur.execute("UPDATE ordenes_compra SET estatus='recibida',fecha_actualizacion=%s WHERE id=%s",(now,oc_id))
+        conn.commit(); cur.close(); conn.close()
+
+        # SAP
+        almacen=query("SELECT codigo FROM almacenes WHERE id=%s",(almacen_id,),fetchone=True) if almacen_id else None
+        ent_data={"almacen_codigo":almacen["codigo"] if almacen else "","sap_oc_entry":oc.get("sap_doc_entry")}
+        sap_ok,sap_msg,sap_de=sap_crear_goods_receipt(ent_data,items)
+        query("UPDATE entradas_mercancia SET sap_doc_entry=%s,sap_sync_status=%s,sap_sync_msg=%s WHERE id=%s",
+              ("ok" if sap_ok else "error",sap_msg,sap_de or None,ent_id) if False else
+              (sap_de,"ok" if sap_ok else "error",sap_msg,ent_id),commit=True)
+
+        if sap_ok: flash(f"Entrada {folio} registrada ✅ SAP:{sap_de}","success")
+        else: flash(f"Entrada {folio} guardada ⚠ SAP:{sap_msg}","warning")
+    except Exception as e:
+        flash(f"Error: {e}","danger")
+    return redirect(url_for("detalle_compra",oc_id=oc_id))
+
+
+# ══════════════════════════════════════════════════════════
+# ── ÓRDENES DE VENTA ──────────────────────────────────────
+# ══════════════════════════════════════════════════════════
+EST_OV=["borrador","confirmada","en proceso","surtida","cancelada"]
+
+def gen_folio_ov():
+    c=query("SELECT COUNT(*) AS c FROM ordenes_venta",fetchone=True)["c"]
+    return f"OV-{(c+1):04d}"
+
+def sap_crear_orden_venta(ov,items):
+    s=sap_login()
+    if not s: return False,"No se pudo conectar a SAP",None
+    try:
+        lines=[]
+        for it in items:
+            line={"ItemCode":it["item_code"],"Quantity":float(it["cantidad"]),
+                  "UnitPrice":float(it["precio_unitario"]),
+                  "DiscountPercent":float(it.get("descuento",0))}
+            if ov.get("almacen_codigo"): line["WarehouseCode"]=ov["almacen_codigo"]
+            lines.append(line)
+        payload={"CardCode":ov.get("cliente_cardcode",""),
+                 "DocDueDate":ov.get("fecha_entrega",""),
+                 "DocumentLines":lines}
+        if ov.get("notas"): payload["Comments"]=ov["notas"]
+        r=s.post(f"{SAP_BASE_URL}/Orders",json=payload,timeout=20)
+        if r.status_code in [200,201]:
+            de=r.json().get("DocEntry") or r.json().get("DocNum")
+            return True,f"OV creada en SAP (DocEntry:{de})",de
+        msg=r.json().get("error",{}).get("message","Error")
+        return False,f"SAP:{msg}",None
+    except Exception as e: return False,str(e),None
+    finally: sap_logout(s)
+
+@app.route("/ventas")
+def ventas():
+    if not logged_in(): return redirect(url_for("login"))
+    uid=session["user_id"]; rol=session["rol"]
+    fil_est=request.args.get("estatus",""); q=request.args.get("q","").strip()
+    base="""SELECT ov.*,u.nombre AS creador_nombre,alm.nombre AS almacen_nombre
+            FROM ordenes_venta ov
+            LEFT JOIN usuarios u ON u.id=ov.creado_por
+            LEFT JOIN almacenes alm ON alm.id=ov.almacen_id WHERE 1=1"""
+    params=[]
+    if not can_see_all() and rol!="supervisor":
+        base+=" AND ov.creado_por=%s"; params.append(uid)
+    if fil_est: base+=" AND ov.estatus=%s"; params.append(fil_est)
+    if q: base+=" AND (ov.folio ILIKE %s OR ov.cliente_nombre ILIKE %s)"; params+=[f"%{q}%",f"%{q}%"]
+    base+=" ORDER BY ov.fecha_creacion DESC"
+    lista=query(base,tuple(params),fetchall=True) or []
+    almacenes_list=query("SELECT id,codigo,nombre FROM almacenes WHERE activo=true ORDER BY nombre",fetchall=True) or []
+    cots_pendientes=query("""SELECT c.id,c.folio,c.cliente_nombre,c.total
+                              FROM cotizaciones c WHERE c.estatus='aceptada'
+                              AND c.id NOT IN (SELECT cotizacion_id FROM ordenes_venta WHERE cotizacion_id IS NOT NULL)
+                              ORDER BY c.fecha_creacion DESC LIMIT 20""",fetchall=True) or []
+    return render_template("ventas.html", empresa=EMPRESA, logo=LOGO,
+                           ordenes=lista, estatus_ov=EST_OV,
+                           almacenes=almacenes_list, cots_pendientes=cots_pendientes,
+                           fil_est=fil_est, q=q)
+
+@app.route("/ventas/crear", methods=["POST"])
+def crear_orden_venta():
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("crear","ventas"): abort(403)
+    uid=session["user_id"]; now=datetime.now().strftime("%Y-%m-%d %H:%M")
+    import json as _json
+    items_raw=request.form.get("items_json","[]")
+    try: items=_json.loads(items_raw)
+    except: items=[]
+    if not items:
+        flash("Agrega al menos un artículo.","danger"); return redirect(url_for("ventas"))
+
+    subtotal=sum(float(i["cantidad"])*float(i["precio_unitario"])*(1-float(i.get("descuento",0))/100) for i in items)
+    impuesto=round(subtotal*0.16,2); total=round(subtotal+impuesto,2)
+    folio=gen_folio_ov()
+    cliente_id=request.form.get("cliente_id") or None
+    cliente_nombre=request.form.get("cliente_nombre","").strip()
+    almacen_id=request.form.get("almacen_id") or None
+    cotizacion_id=request.form.get("cotizacion_id") or None
+    fecha_entrega=request.form.get("fecha_entrega","").strip()
+    notas=request.form.get("notas","").strip()
+
+    try:
+        conn=get_db(); cur=conn.cursor()
+        cur.execute("""INSERT INTO ordenes_venta
+            (folio,cotizacion_id,cliente_id,cliente_nombre,almacen_id,estatus,moneda,
+             subtotal,impuesto,total,notas,fecha_entrega,sap_sync_status,creado_por,fecha_creacion,fecha_actualizacion)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (folio,cotizacion_id,cliente_id,cliente_nombre,almacen_id,"borrador","MXN",
+             subtotal,impuesto,total,notas,fecha_entrega,"pendiente",uid,now,now))
+        ov_id=cur.fetchone()["id"]
+        for it in items:
+            sub=round(float(it["cantidad"])*float(it["precio_unitario"])*(1-float(it.get("descuento",0))/100),2)
+            cur.execute("""INSERT INTO ordenes_venta_items
+                (orden_id,item_code,item_nombre,uom,cantidad,precio_unitario,descuento,subtotal)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (ov_id,it["codigo"],it["nombre"],it.get("uom",""),
+                 float(it["cantidad"]),float(it["precio_unitario"]),float(it.get("descuento",0)),sub))
+        conn.commit(); cur.close(); conn.close()
+
+        # SAP
+        almacen=query("SELECT codigo FROM almacenes WHERE id=%s",(almacen_id,),fetchone=True) if almacen_id else None
+        import re
+        cli=query("SELECT notas FROM clientes WHERE id=%s",(cliente_id,),fetchone=True) if cliente_id else None
+        card_code=""
+        if cli and cli.get("notas"):
+            m=re.search(r"SAP CardCode:\s*(\S+)",cli["notas"] or "")
+            if m: card_code=m.group(1)
+        ov_data={"cliente_cardcode":card_code,"fecha_entrega":fecha_entrega,
+                 "notas":notas,"almacen_codigo":almacen["codigo"] if almacen else ""}
+        sap_ok,sap_msg,sap_de=sap_crear_orden_venta(ov_data,items)
+        query("UPDATE ordenes_venta SET sap_doc_entry=%s,sap_sync_status=%s,sap_sync_msg=%s WHERE id=%s",
+              (sap_de,"ok" if sap_ok else "error",sap_msg,ov_id),commit=True)
+
+        if sap_ok: flash(f"OV {folio} creada ✅ SAP:{sap_de}","success")
+        else: flash(f"OV {folio} guardada ⚠ SAP:{sap_msg}","warning")
+        return redirect(url_for("detalle_venta",ov_id=ov_id))
+    except Exception as e:
+        flash(f"Error: {e}","danger"); return redirect(url_for("ventas"))
+
+@app.route("/ventas/<int:ov_id>")
+def detalle_venta(ov_id):
+    if not logged_in(): return redirect(url_for("login"))
+    ov=query("""SELECT ov.*,u.nombre AS creador_nombre,alm.nombre AS almacen_nombre,alm.codigo AS almacen_codigo
+                FROM ordenes_venta ov
+                LEFT JOIN usuarios u ON u.id=ov.creado_por
+                LEFT JOIN almacenes alm ON alm.id=ov.almacen_id WHERE ov.id=%s""",(ov_id,),fetchone=True)
+    if not ov: abort(404)
+    items=query("SELECT * FROM ordenes_venta_items WHERE orden_id=%s ORDER BY id",(ov_id,),fetchall=True) or []
+    remisiones=query("""SELECT r.*,u.nombre AS creador FROM remisiones r
+                        LEFT JOIN usuarios u ON u.id=r.creado_por
+                        WHERE r.orden_venta_id=%s ORDER BY r.fecha_creacion DESC""",(ov_id,),fetchall=True) or []
+    almacenes_list=query("SELECT id,codigo,nombre FROM almacenes WHERE activo=true ORDER BY nombre",fetchall=True) or []
+    return render_template("venta_detalle.html", empresa=EMPRESA, logo=LOGO,
+                           ov=ov, items=items, remisiones=remisiones,
+                           almacenes=almacenes_list, estatus_ov=EST_OV)
+
+@app.route("/ventas/<int:ov_id>/estatus", methods=["POST"])
+def actualizar_estatus_venta(ov_id):
+    if not logged_in(): return redirect(url_for("login"))
+    nuevo=request.form.get("estatus","borrador")
+    now=datetime.now().strftime("%Y-%m-%d %H:%M")
+    query("UPDATE ordenes_venta SET estatus=%s,fecha_actualizacion=%s WHERE id=%s",(nuevo,now,ov_id),commit=True)
+    flash("Estatus actualizado","success")
+    return redirect(url_for("detalle_venta",ov_id=ov_id))
+
+
+# ══════════════════════════════════════════════════════════
+# ── REMISIONES ────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════
+def gen_folio_rem():
+    c=query("SELECT COUNT(*) AS c FROM remisiones",fetchone=True)["c"]
+    return f"REM-{(c+1):04d}"
+
+def sap_crear_delivery(rem,items):
+    s=sap_login()
+    if not s: return False,"No se pudo conectar a SAP",None
+    try:
+        lines=[]
+        for it in items:
+            line={"ItemCode":it["item_code"],"Quantity":float(it["cantidad"]),
+                  "UnitPrice":float(it["precio_unitario"])}
+            if rem.get("almacen_codigo"): line["WarehouseCode"]=rem["almacen_codigo"]
+            if it.get("numero_serie"): line["SerialNumbers"]=[{"ManufacturerSerialNumber":it["numero_serie"]}]
+            lines.append(line)
+        payload={"CardCode":rem.get("cliente_cardcode",""),
+                 "DocDate":datetime.now().strftime("%Y-%m-%d"),
+                 "DocumentLines":lines}
+        if rem.get("sap_ov_entry"): payload["BaseType"]=17; payload["BaseEntry"]=rem["sap_ov_entry"]
+        r=s.post(f"{SAP_BASE_URL}/DeliveryNotes",json=payload,timeout=20)
+        if r.status_code in [200,201]:
+            de=r.json().get("DocEntry") or r.json().get("DocNum")
+            return True,f"Remisión creada en SAP (DocEntry:{de})",de
+        msg=r.json().get("error",{}).get("message","Error")
+        return False,f"SAP:{msg}",None
+    except Exception as e: return False,str(e),None
+    finally: sap_logout(s)
+
+@app.route("/ventas/<int:ov_id>/remision/crear", methods=["POST"])
+def crear_remision(ov_id):
+    if not logged_in(): return redirect(url_for("login"))
+    if not tiene_permiso("crear","ventas"): abort(403)
+    uid=session["user_id"]; now=datetime.now().strftime("%Y-%m-%d %H:%M")
+    import json as _json
+    items_raw=request.form.get("items_json","[]")
+    try: items=_json.loads(items_raw)
+    except: items=[]
+
+    ov=query("SELECT * FROM ordenes_venta WHERE id=%s",(ov_id,),fetchone=True)
+    if not ov: abort(404)
+    almacen_id=request.form.get("almacen_id") or ov.get("almacen_id")
+    folio=gen_folio_rem()
+
+    try:
+        conn=get_db(); cur=conn.cursor()
+        cur.execute("""INSERT INTO remisiones
+            (folio,orden_venta_id,cliente_id,cliente_nombre,almacen_id,estatus,
+             notas,sap_sync_status,creado_por,fecha_creacion,fecha_entrega)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (folio,ov_id,ov["cliente_id"],ov["cliente_nombre"],almacen_id,"entregada",
+             request.form.get("notas","").strip(),"pendiente",uid,now,now))
+        rem_id=cur.fetchone()["id"]
+        for it in items:
+            sub=round(float(it["cantidad"])*float(it["precio"]),2)
+            cur.execute("""INSERT INTO remisiones_items
+                (remision_id,item_code,item_nombre,uom,cantidad,precio_unitario,subtotal,numero_serie,numero_lote)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (rem_id,it["codigo"],it["nombre"],it.get("uom",""),
+                 float(it["cantidad"]),float(it["precio"]),sub,
+                 it.get("serie",""),it.get("lote","")))
+            # Reducir stock
+            if almacen_id:
+                art=query("SELECT id FROM articulos WHERE codigo=%s",(it["codigo"],),fetchone=True)
+                if art:
+                    cur.execute("""UPDATE inventario SET stock_actual=stock_actual-%s,ultima_actualizacion=%s
+                                   WHERE articulo_id=%s AND almacen_id=%s""",
+                                (float(it["cantidad"]),now,art["id"],almacen_id))
+        # Actualizar OV
+        cur.execute("UPDATE ordenes_venta SET estatus='surtida',fecha_actualizacion=%s WHERE id=%s",(now,ov_id))
+        conn.commit(); cur.close(); conn.close()
+
+        # SAP
+        almacen=query("SELECT codigo FROM almacenes WHERE id=%s",(almacen_id,),fetchone=True) if almacen_id else None
+        import re
+        cli=query("SELECT notas FROM clientes WHERE id=%s",(ov["cliente_id"],),fetchone=True) if ov.get("cliente_id") else None
+        card_code=""
+        if cli and cli.get("notas"):
+            m=re.search(r"SAP CardCode:\s*(\S+)",cli["notas"] or "")
+            if m: card_code=m.group(1)
+        rem_data={"cliente_cardcode":card_code,"almacen_codigo":almacen["codigo"] if almacen else "",
+                  "sap_ov_entry":ov.get("sap_doc_entry")}
+        sap_ok,sap_msg,sap_de=sap_crear_delivery(rem_data,items)
+        query("UPDATE remisiones SET sap_doc_entry=%s,sap_sync_status=%s,sap_sync_msg=%s WHERE id=%s",
+              (sap_de,"ok" if sap_ok else "error",sap_msg,rem_id),commit=True)
+
+        if sap_ok: flash(f"Remisión {folio} creada ✅ SAP:{sap_de}","success")
+        else: flash(f"Remisión {folio} guardada ⚠ SAP:{sap_msg}","warning")
+    except Exception as e:
+        flash(f"Error: {e}","danger")
+    return redirect(url_for("detalle_venta",ov_id=ov_id))
+
+@app.route("/remisiones/<int:rem_id>/pdf")
+def remision_pdf(rem_id):
+    if not logged_in(): return redirect(url_for("login"))
+    rem=query("""SELECT r.*,u.nombre AS creador,alm.nombre AS almacen_nombre
+                 FROM remisiones r LEFT JOIN usuarios u ON u.id=r.creado_por
+                 LEFT JOIN almacenes alm ON alm.id=r.almacen_id WHERE r.id=%s""",(rem_id,),fetchone=True)
+    if not rem: abort(404)
+    items=query("SELECT * FROM remisiones_items WHERE remision_id=%s ORDER BY id",(rem_id,),fetchall=True) or []
+    config=query("SELECT * FROM config WHERE id=1",fetchone=True) or {}
+    return render_template("remision_pdf.html", rem=rem, items=items, empresa=EMPRESA, config=config)
+

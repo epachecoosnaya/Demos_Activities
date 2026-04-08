@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}{{ oc.folio }}{% endblock %}
+{% block breadcrumb %}Compras / {{ oc.folio }}{% endblock %}
+{% block content %}
+{% set col_est={"borrador":"#f8f9fa","confirmada":"#e8f0fe","recibida parcial":"#fff3e0","recibida":"#e6f4ea","cancelada":"#fce8e6"} %}
+{% set txt_est={"borrador":"#6c757d","confirmada":"#1a56db","recibida parcial":"#e65100","recibida":"#1e7e34","cancelada":"#c5221f"} %}
+<div class="page-hdr">
+  <div class="page-hdr-left">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <h1 style="font-family:monospace;">{{ oc.folio }}</h1>
+      <span style="background:{{ col_est.get(oc.estatus,'#f8f9fa') }};color:{{ txt_est.get(oc.estatus,'#6c757d') }};border-radius:20px;padding:4px 14px;font-size:12px;font-weight:500;">{{ oc.estatus|capitalize }}</span>
+    </div>
+    <p>{{ oc.proveedor_nombre }} · {{ oc.almacen_nombre or 'Sin almacén' }}</p>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <a href="{{ url_for('compras') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Volver</a>
+    {% if get_perms('compras').get('crear') and oc.estatus in ['confirmada','recibida parcial'] %}
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalEntrada">
+      <i class="bi bi-box-arrow-in-down me-1"></i>Registrar entrada
+    </button>
+    {% endif %}
+  </div>
+</div>
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-info-circle me-1" style="color:#714B67;"></i>Detalles</div>
+      <div class="card-body" style="padding:16px;">
+        <div style="margin-bottom:10px;"><div style="font-size:11px;color:#adb5bd;">Proveedor</div><div style="font-weight:600;">{{ oc.proveedor_nombre or '—' }}</div></div>
+        <div style="margin-bottom:10px;"><div style="font-size:11px;color:#adb5bd;">Almacén</div><div>{{ oc.almacen_nombre or '—' }}</div></div>
+        <div style="margin-bottom:10px;"><div style="font-size:11px;color:#adb5bd;">Fecha entrega</div><div>{{ oc.fecha_entrega or '—' }}</div></div>
+        {% if oc.notas %}<div style="margin-bottom:10px;"><div style="font-size:11px;color:#adb5bd;">Notas</div><div style="font-size:13px;color:#6c757d;">{{ oc.notas }}</div></div>{% endif %}
+        <div style="margin-top:12px;padding:12px;border-radius:8px;background:{% if oc.sap_sync_status=='ok' %}#e6f4ea{% elif oc.sap_sync_status=='error' %}#fce8e6{% else %}#f8f9fa{% endif %};">
+          <div style="font-size:11px;color:#adb5bd;margin-bottom:4px;">SAP B1</div>
+          {% if oc.sap_sync_status=='ok' %}<span style="color:#1e7e34;font-weight:600;font-size:13px;"><i class="bi bi-check-circle-fill me-1"></i>Sincronizado · ID: {{ oc.sap_doc_entry }}</span>
+          {% elif oc.sap_sync_status=='error' %}<span style="color:#c5221f;font-size:12.5px;"><i class="bi bi-exclamation-triangle me-1"></i>{{ oc.sap_sync_msg }}</span>
+          {% else %}<span style="color:#adb5bd;font-size:13px;">Pendiente</span>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% if get_perms('compras').get('editar') %}
+    <div class="card mb-3">
+      <div class="card-header">Cambiar estatus</div>
+      <div class="card-body" style="padding:14px;">
+        <form method="POST" action="{{ url_for('actualizar_estatus_compra',oc_id=oc.id) }}">
+          <select class="form-select form-select-sm mb-2" name="estatus">
+            {% for e in estatus_oc %}<option value="{{ e }}" {% if oc.estatus==e %}selected{% endif %}>{{ e|capitalize }}</option>{% endfor %}
+          </select>
+          <button type="submit" class="btn btn-primary btn-sm w-100">Guardar</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+    <div class="card">
+      <div class="card-header">Resumen</div>
+      <div class="card-body" style="padding:14px 16px;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;"><span style="color:#6c757d;">Subtotal</span><span>$ {{ "%.2f"|format(oc.subtotal or 0) }}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;"><span style="color:#6c757d;">IVA 16%</span><span>$ {{ "%.2f"|format(oc.impuesto or 0) }}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;border-top:2px solid #714B67;padding-top:10px;color:#714B67;"><span>TOTAL</span><span>$ {{ "%.2f"|format(oc.total or 0) }}</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-list me-1" style="color:#714B67;"></i>Artículos</div>
+      <div class="table-responsive">
+        <table class="table" style="font-size:13px;">
+          <thead><tr><th>Código</th><th>Artículo</th><th>UM</th><th style="text-align:right;">Cant.</th><th style="text-align:right;">Precio</th><th style="text-align:right;">Subtotal</th></tr></thead>
+          <tbody>{% for it in items %}
+          <tr><td style="font-family:monospace;font-size:12px;color:#714B67;">{{ it.item_code }}</td><td>{{ it.item_nombre }}</td>
+          <td style="color:#6c757d;">{{ it.uom or '—' }}</td><td style="text-align:right;">{{ it.cantidad }}</td>
+          <td style="text-align:right;">$ {{ "%.2f"|format(it.precio_unitario or 0) }}</td>
+          <td style="text-align:right;font-weight:600;">$ {{ "%.2f"|format(it.subtotal or 0) }}</td></tr>
+          {% endfor %}</tbody>
+        </table>
+      </div>
+    </div>
+    {% if entradas %}
+    <div class="card">
+      <div class="card-header"><i class="bi bi-box-arrow-in-down me-1" style="color:#1e7e34;"></i>Entradas de mercancía</div>
+      {% for e in entradas %}
+      <div style="padding:12px 16px;border-bottom:1px solid #f0f1f3;font-size:13px;">
+        <div style="display:flex;justify-content:space-between;">
+          <span style="font-family:monospace;color:#714B67;font-weight:600;">{{ e.folio }}</span>
+          <span style="font-size:12px;color:#adb5bd;">{{ e.fecha_recepcion[:10] if e.fecha_recepcion else '—' }}</span>
+        </div>
+        <div style="font-size:12px;color:#6c757d;margin-top:2px;">
+          {% if e.sap_sync_status=='ok' %}<i class="bi bi-check-circle-fill" style="color:#1e7e34;"></i> SAP: {{ e.sap_doc_entry }}
+          {% elif e.sap_sync_status=='error' %}<i class="bi bi-exclamation-triangle" style="color:#c5221f;"></i> {{ e.sap_sync_msg }}
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if get_perms('compras').get('crear') and oc.estatus in ['borrador','confirmada','recibida parcial'] %}
+<div class="modal fade" id="modalEntrada" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-box-arrow-in-down me-2" style="color:#1e7e34;"></i>Registrar entrada</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="form-entrada" method="POST" action="{{ url_for('crear_entrada',oc_id=oc.id) }}">
+          <input type="hidden" name="items_json" id="ent-items-json">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6"><label class="form-label">Almacén destino</label>
+              <select class="form-select" name="almacen_id">
+                <option value="">— Mismo de la OC —</option>
+                {% for a in almacenes %}<option value="{{ a.id }}" {% if oc.almacen_id==a.id %}selected{% endif %}>{{ a.nombre }}</option>{% endfor %}
+              </select></div>
+            <div class="col-md-6"><label class="form-label">Notas</label>
+              <input class="form-control" name="notas" placeholder="Observaciones de recepción"></div>
+          </div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#adb5bd;margin-bottom:8px;">Cantidades recibidas</div>
+          <table class="table" style="font-size:13px;" id="ent-tabla">
+            <thead><tr><th>Código</th><th>Artículo</th><th style="text-align:right;">Pedido</th><th style="width:120px;">Recibido</th><th>Serie/Lote</th></tr></thead>
+            <tbody>
+              {% for it in items %}
+              <tr>
+                <td style="font-family:monospace;font-size:12px;color:#714B67;">{{ it.item_code }}</td>
+                <td>{{ it.item_nombre }}</td>
+                <td style="text-align:right;">{{ it.cantidad }}</td>
+                <td><input type="number" class="form-control form-control-sm ent-recv" step="any" min="0"
+                    data-codigo="{{ it.item_code }}" data-nombre="{{ it.item_nombre }}"
+                    data-uom="{{ it.uom or '' }}" data-pedido="{{ it.cantidad }}"
+                    data-precio="{{ it.precio_unitario }}" value="{{ it.cantidad }}"></td>
+                <td><input type="text" class="form-control form-control-sm ent-serie" data-codigo="{{ it.item_code }}" placeholder="Serie o lote"></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </form>
+      </div>
+      <div class="modal-footer" style="background:#f8f9fb;">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="guardarEntrada()"><i class="bi bi-check-lg me-1"></i>Registrar entrada</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+<script>
+function guardarEntrada() {
+  const items=[];
+  document.querySelectorAll('.ent-recv').forEach(inp=>{
+    const serie=document.querySelector(`.ent-serie[data-codigo="${inp.dataset.codigo}"]`);
+    items.push({codigo:inp.dataset.codigo,nombre:inp.dataset.nombre,uom:inp.dataset.uom,
+      pedido:parseFloat(inp.dataset.pedido),recibido:parseFloat(inp.value)||0,
+      precio:parseFloat(inp.dataset.precio),serie:serie?serie.value:'',lote:''});
+  });
+  document.getElementById('ent-items-json').value=JSON.stringify(items);
+  document.getElementById('form-entrada').submit();
+}
+</script>
+{% endblock %}
