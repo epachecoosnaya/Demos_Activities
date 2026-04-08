@@ -351,11 +351,11 @@ function renderItems() {
       <td style="font-size:13px;">${it.item_nombre}</td>
       <td style="font-size:12px;color:#6c757d;">${it.uom}</td>
       <td><input type="number" class="form-control form-control-sm" value="${it.cantidad}" min="0.001" step="any"
-          oninput="cotItems[${i}].cantidad=parseFloat(this.value)||0;renderItems();" style="width:80px;"></td>
+          onchange="cotItems[${i}].cantidad=parseFloat(this.value)||0;renderItems();" onblur="cotItems[${i}].cantidad=parseFloat(this.value)||0;renderItems();" style="width:80px;"></td>
       <td><input type="number" class="form-control form-control-sm" value="${it.precio_unitario}" min="0" step="0.01"
-          oninput="cotItems[${i}].precio_unitario=parseFloat(this.value)||0;renderItems();" style="width:110px;"></td>
+          onchange="cotItems[${i}].precio_unitario=parseFloat(this.value)||0;renderItems();" onblur="cotItems[${i}].precio_unitario=parseFloat(this.value)||0;renderItems();" style="width:110px;"></td>
       <td><input type="number" class="form-control form-control-sm" value="${it.descuento}" min="0" max="100" step="0.01"
-          oninput="cotItems[${i}].descuento=parseFloat(this.value)||0;renderItems();" style="width:80px;"></td>
+          onchange="cotItems[${i}].descuento=parseFloat(this.value)||0;renderItems();" onblur="cotItems[${i}].descuento=parseFloat(this.value)||0;renderItems();" style="width:80px;"></td>
       <td style="text-align:right;font-weight:600;">$ ${sub.toFixed(2)}</td>
       <td><button type="button" class="btn btn-sm" style="background:#fce8e6;color:#c5221f;border:none;"
           onclick="cotItems.splice(${i},1);renderItems();"><i class="bi bi-trash"></i></button></td>`;

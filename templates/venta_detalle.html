@@ -12,7 +12,7 @@
     </div>
     <p>{{ ov.cliente_nombre }} · {{ ov.almacen_nombre or 'Sin almacén' }}</p>
   </div>
-  <div style="display:flex;gap:8px;">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
     <a href="{{ url_for('ventas') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Volver</a>
     {% if get_perms('ventas').get('crear') and ov.estatus in ['confirmada','en proceso'] %}
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalRemision">
@@ -66,7 +66,7 @@
     <div class="card mb-3">
       <div class="card-header"><i class="bi bi-list me-1" style="color:#714B67;"></i>Artículos</div>
       <div class="table-responsive">
-        <table class="table" style="font-size:13px;">
+        <table class="table" style="font-size:12px;min-width:500px;">
           <thead><tr><th>Código</th><th>Artículo</th><th>UM</th><th style="text-align:right;">Cant.</th><th style="text-align:right;">Precio</th><th style="text-align:right;">Desc%</th><th style="text-align:right;">Subtotal</th></tr></thead>
           <tbody>{% for it in items %}
           <tr><td style="font-family:monospace;font-size:12px;color:#714B67;">{{ it.item_code }}</td><td>{{ it.item_nombre }}</td>

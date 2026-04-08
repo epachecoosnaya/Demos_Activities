@@ -1500,6 +1500,28 @@ def reintentar_sap(llamada_id):
         flash(f"❌ SAP rechazó: {sap_msg}","danger")
     return redirect(url_for("detalle_servicio", llamada_id=llamada_id))
 
+
+@app.route("/proveedores/buscar")
+def buscar_proveedores():
+    """Busca clientes con tipo_cliente='S' (proveedores SAP)."""
+    if not logged_in(): return jsonify([])
+    q = request.args.get("q","").strip().replace("*","")
+    if len(q) < 1: return jsonify([])
+    param = f"%{q}%"
+    rows = query("""SELECT id,nombre,empresa,telefono,tipo_cliente,fuente
+                    FROM clientes WHERE activo=1
+                    AND (tipo_cliente='S' OR tipo_cliente IS NULL OR tipo_cliente='')
+                    AND (nombre ILIKE %s OR empresa ILIKE %s)
+                    ORDER BY nombre LIMIT 10""",
+                 (param,param), fetchall=True) or []
+    return jsonify([{
+        "id": r["id"],
+        "nombre": r["nombre"],
+        "empresa": r["empresa"] or "",
+        "telefono": r["telefono"] or "",
+        "fuente": r["fuente"] or "CRM",
+    } for r in rows])
+
 # ── BÚSQUEDA DE CLIENTES (autocomplete) ───────────────────
 @app.route("/clientes/buscar")
 def buscar_clientes():
@@ -1613,6 +1635,45 @@ def editar_almacen(almacen_id):
            request.form.get("tipo","general"),
            activo,now,almacen_id), commit=True)
     flash("Almacén actualizado ✅","success")
+    return redirect(url_for("almacenes"))
+
+
+@app.route("/almacenes/sync-sap", methods=["POST"])
+def sync_almacenes_sap():
+    """Sincroniza almacenes desde SAP Service Layer."""
+    if not logged_in(): return redirect(url_for("login"))
+    if not is_admin(): abort(403)
+    s = sap_login()
+    if not s:
+        flash("No se pudo conectar a SAP Service Layer.","danger")
+        return redirect(url_for("almacenes"))
+    try:
+        r = s.get(f"{SAP_BASE_URL}/Warehouses", params={"$select":"WarehouseCode,WarehouseName,Street,City,Active","$top":100}, timeout=20)
+        r.raise_for_status()
+        whs = r.json().get("value",[])
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        creados = 0; actualizados = 0
+        for wh in whs:
+            codigo = wh.get("WarehouseCode","")
+            nombre = wh.get("WarehouseName","") or codigo
+            activo = wh.get("Active","tYES") == "tYES"
+            ubicacion = f"{wh.get('Street','')}, {wh.get('City','')}".strip(", ")
+            existing = query("SELECT id FROM almacenes WHERE codigo=%s",(codigo,),fetchone=True)
+            if existing:
+                query("""UPDATE almacenes SET nombre=%s,ubicacion=%s,activo=%s,fecha_actualizacion=%s WHERE codigo=%s""",
+                      (nombre,ubicacion,activo,now,codigo),commit=True)
+                actualizados+=1
+            else:
+                try:
+                    query("""INSERT INTO almacenes (codigo,nombre,descripcion,ubicacion,tipo,activo,fuente,fecha_creacion,fecha_actualizacion)
+                             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                          (codigo,nombre,"",ubicacion,"general",activo,"SAP",now,now),commit=True)
+                    creados+=1
+                except: actualizados+=1
+        sap_logout(s)
+        flash(f"Sincronización SAP: {creados} nuevos, {actualizados} actualizados ✅","success")
+    except Exception as e:
+        flash(f"Error SAP: {e}","danger")
     return redirect(url_for("almacenes"))
 
 # ── API Almacenes para dropdowns ──
@@ -1871,8 +1932,10 @@ def sap_crear_orden_compra(oc, items):
     try:
         lines = []
         for it in items:
-            line = {"ItemCode":it["item_code"],"Quantity":float(it["cantidad"]),
-                    "UnitPrice":float(it["precio_unitario"])}
+            item_code = it.get("item_code") or it.get("codigo","")
+            if not item_code: continue
+            line = {"ItemCode":item_code,"Quantity":float(it.get("cantidad",1)),
+                    "UnitPrice":float(it.get("precio_unitario",0))}
             if oc.get("almacen_codigo"): line["WarehouseCode"]=oc["almacen_codigo"]
             lines.append(line)
         payload = {"CardCode":oc.get("proveedor_cardcode",""),"DocDueDate":oc.get("fecha_entrega",""),
@@ -2106,8 +2169,10 @@ def sap_crear_orden_venta(ov,items):
     try:
         lines=[]
         for it in items:
-            line={"ItemCode":it["item_code"],"Quantity":float(it["cantidad"]),
-                  "UnitPrice":float(it["precio_unitario"]),
+            item_code = it.get("item_code") or it.get("codigo","")
+            if not item_code: continue
+            line={"ItemCode":item_code,"Quantity":float(it.get("cantidad",1)),
+                  "UnitPrice":float(it.get("precio_unitario",0)),
                   "DiscountPercent":float(it.get("descuento",0))}
             if ov.get("almacen_codigo"): line["WarehouseCode"]=ov["almacen_codigo"]
             lines.append(line)
@@ -2250,10 +2315,12 @@ def sap_crear_delivery(rem,items):
     try:
         lines=[]
         for it in items:
-            line={"ItemCode":it["item_code"],"Quantity":float(it["cantidad"]),
-                  "UnitPrice":float(it["precio_unitario"])}
+            item_code = it.get("item_code") or it.get("codigo","")
+            if not item_code: continue
+            line={"ItemCode":item_code,"Quantity":float(it.get("cantidad",1)),
+                  "UnitPrice":float(it.get("precio_unitario") or it.get("precio",0))}
             if rem.get("almacen_codigo"): line["WarehouseCode"]=rem["almacen_codigo"]
-            if it.get("numero_serie"): line["SerialNumbers"]=[{"ManufacturerSerialNumber":it["numero_serie"]}]
+            if it.get("serie"): line["SerialNumbers"]=[{"ManufacturerSerialNumber":it["serie"]}]
             lines.append(line)
         payload={"CardCode":rem.get("cliente_cardcode",""),
                  "DocDate":datetime.now().strftime("%Y-%m-%d"),

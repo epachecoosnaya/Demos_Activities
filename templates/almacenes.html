@@ -4,11 +4,20 @@
 {% block content %}
 <div class="page-hdr">
   <div class="page-hdr-left"><h1>Almacenes</h1><p>{{ almacenes|length }} registros</p></div>
-  {% if get_perms('almacenes').get('crear') %}
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevo">
-    <i class="bi bi-plus-lg me-1"></i> Nuevo almacén
-  </button>
-  {% endif %}
+  <div style="display:flex;gap:8px;">
+    {% if session.get('rol') == 'admin' %}
+    <form method="POST" action="{{ url_for('sync_almacenes_sap') }}" style="display:inline;">
+      <button type="submit" class="btn btn-sm btn-outline-primary" onclick="return confirm('¿Sincronizar almacenes desde SAP?')">
+        <i class="bi bi-cloud-download me-1"></i> Sync SAP
+      </button>
+    </form>
+    {% endif %}
+    {% if get_perms('almacenes').get('crear') %}
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+      <i class="bi bi-plus-lg me-1"></i> Nuevo almacén
+    </button>
+    {% endif %}
+  </div>
 </div>
 
 <div class="row g-3">

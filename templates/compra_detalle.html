@@ -12,7 +12,7 @@
     </div>
     <p>{{ oc.proveedor_nombre }} · {{ oc.almacen_nombre or 'Sin almacén' }}</p>
   </div>
-  <div style="display:flex;gap:8px;">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
     <a href="{{ url_for('compras') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Volver</a>
     {% if get_perms('compras').get('crear') and oc.estatus in ['confirmada','recibida parcial'] %}
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalEntrada">
