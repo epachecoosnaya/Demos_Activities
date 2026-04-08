@@ -698,8 +698,8 @@ def configuracion():
     if not is_admin(): abort(403)
     config = query("SELECT * FROM config WHERE id=1",fetchone=True)
     if not config:
-        query("INSERT INTO config (id,empresa,logo_url,color_primario,descripcion) VALUES (1,%s,%s,%s,%s)",
-              (EMPRESA,"","#714B67",""),commit=True)
+        query("INSERT INTO config (id,empresa,logo_url,color_primario,descripcion,sitio_web) VALUES (1,%s,%s,%s,%s,%s)",
+              (EMPRESA,"","#714B67","",""),commit=True)
         config = query("SELECT * FROM config WHERE id=1",fetchone=True)
     if request.method == "POST":
         empresa     = request.form.get("empresa","").strip() or EMPRESA
@@ -721,6 +721,47 @@ def configuracion():
         "eventos":  query("SELECT COUNT(*) AS c FROM eventos",fetchone=True)["c"],
     }
     return render_template("configuracion.html", empresa=EMPRESA, logo=LOGO, config=config, stats=stats)
+
+
+@app.route("/configuracion/extraer-colores", methods=["POST"])
+def extraer_colores():
+    """Extrae colores dominantes de un sitio web."""
+    if not logged_in(): return jsonify({"ok":False})
+    if not is_admin(): return jsonify({"ok":False})
+    url = request.json.get("url","").strip()
+    if not url: return jsonify({"ok":False,"msg":"URL requerida"})
+    if not url.startswith("http"): url = "https://" + url
+    try:
+        import requests as _r
+        resp = _r.get(url, timeout=8, headers={"User-Agent":"Mozilla/5.0"}, verify=False)
+        html = resp.text
+        # Extract colors from CSS and inline styles
+        import re
+        colores = set()
+        # Hex colors #rrggbb and #rgb
+        for c in re.findall(r'#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})(?:[^0-9A-Fa-f]|$)', html):
+            if len(c)==3: c = c[0]*2+c[1]*2+c[2]*2
+            colores.add("#"+c.upper())
+        # rgb() colors
+        for r,g,b in re.findall(r'rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)', html):
+            hex_c = "#{:02X}{:02X}{:02X}".format(int(r),int(g),int(b))
+            colores.add(hex_c)
+        # Filter out pure white, pure black, and very light/dark grays
+        def is_useful(h):
+            h = h.lstrip("#")
+            r,g,b = int(h[0:2],16),int(h[2:4],16),int(h[4:6],16)
+            brightness = (r*299+g*587+b*114)//1000
+            saturation = max(r,g,b) - min(r,g,b)
+            return 20 < brightness < 235 and saturation > 15
+        colores_utiles = [c for c in colores if is_useful(c)]
+        # Sort by saturation (most colorful first)
+        def saturation(h):
+            h=h.lstrip("#"); r,g,b=int(h[0:2],16),int(h[2:4],16),int(h[4:6],16)
+            return max(r,g,b)-min(r,g,b)
+        colores_utiles.sort(key=saturation, reverse=True)
+        return jsonify({"ok":True,"colores":colores_utiles[:16],"url":url})
+    except Exception as e:
+        return jsonify({"ok":False,"msg":str(e)})
 
 # ── OLVIDE PASSWORD ───────────────────────────────────────
 @app.route("/olvide-password", methods=["GET","POST"])

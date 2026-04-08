@@ -51,13 +51,41 @@
               <label class="form-label">Descripción / Slogan</label>
               <input class="form-control" name="descripcion" value="{{ config.descripcion or '' }}" placeholder="Ej: Portal de Actividades de Campo">
             </div>
+            <div class="col-12">
+              <label class="form-label">Sitio web</label>
+              <div style="display:flex;gap:8px;">
+                <input class="form-control" name="sitio_web" id="sitio-web-input"
+                       value="{{ config.sitio_web or '' }}" placeholder="https://tuempresa.com">
+                <button type="button" class="btn btn-outline-primary btn-sm" style="white-space:nowrap;"
+                        onclick="extraerColores()">
+                  <i class="bi bi-eyedropper me-1"></i> Extraer colores
+                </button>
+              </div>
+              <div style="font-size:12px;color:#adb5bd;margin-top:4px;">
+                Ingresa tu sitio web y extrae automáticamente los colores de tu marca
+              </div>
+            </div>
+            <!-- Paleta extraída -->
+            <div class="col-12" id="paleta-section" style="display:none;">
+              <label class="form-label">Colores detectados — haz clic para aplicar</label>
+              <div id="paleta-colores" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+            </div>
             <div class="col-md-6">
               <label class="form-label">Color principal</label>
               <div style="display:flex;gap:8px;align-items:center;">
-                <input type="color" name="color_primario" value="{{ config.color_primario or '#714B67' }}"
-                       style="width:48px;height:38px;border-radius:7px;border:1px solid #ced4da;cursor:pointer;padding:2px;">
+                <input type="color" name="color_primario" id="color-picker"
+                       value="{{ config.color_primario or '#714B67' }}"
+                       style="width:48px;height:38px;border-radius:7px;border:1px solid #ced4da;cursor:pointer;padding:2px;"
+                       oninput="document.getElementById('color-hex').value=this.value">
                 <input class="form-control" id="color-hex" value="{{ config.color_primario or '#714B67' }}"
-                       style="font-family:monospace;" readonly>
+                       style="font-family:monospace;"
+                       oninput="document.getElementById('color-picker').value=this.value">
+              </div>
+              <div style="margin-top:10px;">
+                <label class="form-label" style="font-size:12px;">Vista previa:</label>
+                <div id="color-preview" style="height:36px;border-radius:8px;background:{{ config.color_primario or '#714B67' }};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:500;">
+                  Tu color primario
+                </div>
               </div>
             </div>
             <div class="col-md-6">
@@ -119,8 +147,61 @@
 
 {% block extra_js %}
 <script>
-document.querySelector('[name=color_primario]').oninput = function() {
+// Sync color picker ↔ hex input
+document.getElementById('color-picker').addEventListener('input', function() {
   document.getElementById('color-hex').value = this.value;
-};
+  document.getElementById('color-preview').style.background = this.value;
+});
+document.getElementById('color-hex').addEventListener('input', function() {
+  if (/^#[0-9A-Fa-f]{6}$/.test(this.value)) {
+    document.getElementById('color-picker').value = this.value;
+    document.getElementById('color-preview').style.background = this.value;
+  }
+});
+
+async function extraerColores() {
+  const url = document.getElementById('sitio-web-input').value.trim();
+  if (!url) { alert('Ingresa la URL de tu sitio web primero'); return; }
+  const btn = event.target.closest('button');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Extrayendo...';
+  try {
+    const res = await fetch('/configuracion/extraer-colores', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({url})
+    });
+    const data = await res.json();
+    if (data.ok && data.colores.length) {
+      const paleta = document.getElementById('paleta-colores');
+      paleta.innerHTML = data.colores.map(c => `
+        <div onclick="aplicarColor('${c}')" title="${c}"
+             style="width:44px;height:44px;border-radius:8px;background:${c};cursor:pointer;
+                    border:2px solid transparent;transition:all .15s;box-shadow:0 2px 8px rgba(0,0,0,0.15);"
+             onmouseover="this.style.borderColor='#fff';this.style.transform='scale(1.1)'"
+             onmouseout="this.style.borderColor='transparent';this.style.transform='scale(1)'">
+        </div>`).join('');
+      document.getElementById('paleta-section').style.display = '';
+    } else {
+      alert(data.msg || 'No se encontraron colores. Verifica la URL.');
+    }
+  } catch(e) {
+    alert('Error al conectar. Verifica la URL.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-eyedropper me-1"></i> Extraer colores';
+  }
+}
+
+function aplicarColor(color) {
+  document.getElementById('color-picker').value = color;
+  document.getElementById('color-hex').value = color;
+  document.getElementById('color-preview').style.background = color;
+  // Highlight selected
+  document.querySelectorAll('#paleta-colores div').forEach(d => {
+    d.style.borderColor = d.title === color ? '#fff' : 'transparent';
+    d.style.transform = d.title === color ? 'scale(1.15)' : 'scale(1)';
+  });
+}
 </script>
 {% endblock %}

@@ -4,11 +4,18 @@
 {% block content %}
 <div class="page-hdr">
   <div class="page-hdr-left"><h1>Inventario</h1><p>Stock por almacén</p></div>
-  {% if get_perms('inventario').get('crear') %}
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalToma">
-    <i class="bi bi-clipboard-check me-1"></i> Nueva toma
-  </button>
-  {% endif %}
+  <div style="display:flex;gap:8px;">
+    {% if session.get('rol') in ['admin','gerente','supervisor'] or get_perms('inventario').get('crear') %}
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalToma">
+      <i class="bi bi-clipboard-check me-1"></i> Nueva toma
+    </button>
+    {% endif %}
+    {% if session.get('rol') == 'admin' %}
+    <a href="{{ url_for('articulos') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-box me-1"></i> Ver artículos
+    </a>
+    {% endif %}
+  </div>
 </div>
 
 <!-- FILTROS -->
@@ -59,7 +66,11 @@
         </table>
       </div>
       {% else %}
-      <div style="padding:40px;text-align:center;color:#adb5bd;">Sin stock registrado aún</div>
+      <div style="padding:40px;text-align:center;color:#adb5bd;">
+        <i class="bi bi-boxes" style="font-size:36px;display:block;margin-bottom:10px;"></i>
+        Sin stock en portal aún.<br>
+        <span style="font-size:12px;margin-top:6px;display:block;">Crea una toma de inventario o registra entradas de mercancía para ver stock aquí.</span>
+      </div>
       {% endif %}
     </div>
   </div>
@@ -105,7 +116,6 @@
   </div>
 </div>
 
-{% if get_perms('inventario').get('crear') %}
 <div class="modal fade" id="modalToma" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -129,5 +139,4 @@
     </div>
   </div>
 </div>
-{% endif %}
 {% endblock %}
