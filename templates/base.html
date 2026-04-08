@@ -201,7 +201,8 @@
       <i class="bi bi-grid-fill"></i> Inicio
     </a>
 
-    <div class="nav-section">Módulos</div>
+    <!-- ── CRM ── -->
+    <div class="nav-section">CRM</div>
     <a href="{{ url_for('visitas') }}" class="nav-link-item {% if 'visita' in request.endpoint %}active{% endif %}">
       <i class="bi bi-map-fill"></i> Visitas
     </a>
@@ -214,10 +215,27 @@
     <a href="{{ url_for('servicios') }}" class="nav-link-item {% if 'servicio' in request.endpoint %}active{% endif %}">
       <i class="bi bi-headset"></i> Servicios
     </a>
+
+    <!-- ── VENTAS ── -->
+    <div class="nav-section">Ventas</div>
     <a href="{{ url_for('cotizaciones') }}" class="nav-link-item {% if 'cotizacion' in request.endpoint %}active{% endif %}">
       <i class="bi bi-file-earmark-text"></i> Cotizaciones
     </a>
-    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#4a4a5a;padding:12px 16px 4px;">Inventario</div>
+    <a href="{{ url_for('ventas') }}" class="nav-link-item {% if request.endpoint in ['ventas','crear_orden_venta','detalle_venta','actualizar_estatus_venta'] %}active{% endif %}">
+      <i class="bi bi-bag"></i> Órdenes de Venta
+    </a>
+    <a href="{{ url_for('remisiones') }}" class="nav-link-item {% if request.endpoint in ['remisiones','remision_pdf'] %}active{% endif %}">
+      <i class="bi bi-truck"></i> Remisiones
+    </a>
+
+    <!-- ── COMPRAS ── -->
+    <div class="nav-section">Compras</div>
+    <a href="{{ url_for('compras') }}" class="nav-link-item {% if 'compra' in request.endpoint %}active{% endif %}">
+      <i class="bi bi-cart"></i> Órdenes de Compra
+    </a>
+
+    <!-- ── INVENTARIO ── -->
+    <div class="nav-section">Inventario</div>
     <a href="{{ url_for('almacenes') }}" class="nav-link-item {% if 'almacen' in request.endpoint %}active{% endif %}">
       <i class="bi bi-building"></i> Almacenes
     </a>
@@ -227,27 +245,17 @@
     <a href="{{ url_for('inventario') }}" class="nav-link-item {% if request.endpoint in ['inventario','detalle_toma'] %}active{% endif %}">
       <i class="bi bi-boxes"></i> Inventario
     </a>
-    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#4a4a5a;padding:12px 16px 4px;">Compras / Ventas</div>
-    <a href="{{ url_for('compras') }}" class="nav-link-item {% if 'compra' in request.endpoint %}active{% endif %}">
-      <i class="bi bi-cart"></i> Compras
-    </a>
-    <a href="{{ url_for('ventas') }}" class="nav-link-item {% if 'venta' in request.endpoint or 'remision' in request.endpoint %}active{% endif %}">
-      <i class="bi bi-bag"></i> Ventas / Remisiones
-    </a>
+
+    <!-- ── ADMINISTRACIÓN ── -->
+    <div class="nav-section">Administración</div>
+    <a class="nav-link-item disabled"><i class="bi bi-bar-chart-fill"></i> Reportes <span class="nav-badge">Pronto</span></a>
     {% if session.get('rol') == 'admin' %}
     <a href="{{ url_for('usuarios') }}" class="nav-link-item {% if request.endpoint == 'usuarios' %}active{% endif %}">
       <i class="bi bi-people-fill"></i> Usuarios
     </a>
-    {% endif %}
-
-    <div class="nav-section">En desarrollo</div>
-    <a class="nav-link-item disabled"><i class="bi bi-bar-chart-fill"></i> Reportes <span class="nav-badge">Pronto</span></a>
-    {% if session.get('rol') == 'admin' %}
     <a href="{{ url_for('configuracion') }}" class="nav-link-item {% if request.endpoint == 'configuracion' %}active{% endif %}">
       <i class="bi bi-gear-fill"></i> Configuración
     </a>
-    {% endif %}
-    {% if session.get('rol') == 'admin' %}
     <a href="{{ url_for('permisos_modulo') }}" class="nav-link-item {% if request.endpoint == 'permisos_modulo' %}active{% endif %}">
       <i class="bi bi-shield-lock-fill"></i> Permisos
     </a>

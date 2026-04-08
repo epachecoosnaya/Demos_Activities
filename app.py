@@ -2398,6 +2398,34 @@ def crear_remision(ov_id):
         flash(f"Error: {e}","danger")
     return redirect(url_for("detalle_venta",ov_id=ov_id))
 
+
+# ── REMISIONES (lista independiente) ─────────────────────
+@app.route("/remisiones")
+def remisiones():
+    if not logged_in(): return redirect(url_for("login"))
+    uid = session["user_id"]; rol = session["rol"]
+    q = request.args.get("q","").strip()
+    fil_est = request.args.get("estatus","")
+
+    base = """SELECT r.*,u.nombre AS creador,
+              alm.nombre AS almacen_nombre,
+              ov.folio AS ov_folio
+              FROM remisiones r
+              LEFT JOIN usuarios u ON u.id=r.creado_por
+              LEFT JOIN almacenes alm ON alm.id=r.almacen_id
+              LEFT JOIN ordenes_venta ov ON ov.id=r.orden_venta_id
+              WHERE 1=1"""
+    params=[]
+    if not can_see_all() and rol!="supervisor":
+        base+=" AND r.creado_por=%s"; params.append(uid)
+    if q: base+=" AND (r.folio ILIKE %s OR r.cliente_nombre ILIKE %s)"; params+=[f"%{q}%",f"%{q}%"]
+    if fil_est: base+=" AND r.estatus=%s"; params.append(fil_est)
+    base+=" ORDER BY r.fecha_creacion DESC"
+    lista = query(base,tuple(params),fetchall=True) or []
+
+    return render_template("remisiones.html", empresa=EMPRESA, logo=LOGO,
+                           remisiones=lista, q=q, fil_est=fil_est)
+
 @app.route("/remisiones/<int:rem_id>/pdf")
 def remision_pdf(rem_id):
     if not logged_in(): return redirect(url_for("login"))

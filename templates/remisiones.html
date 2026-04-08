@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Remisiones{% endblock %}
+{% block breadcrumb %}Remisiones{% endblock %}
+{% block content %}
+<div class="page-hdr">
+  <div class="page-hdr-left"><h1>Remisiones</h1><p>{{ remisiones|length }} registros</p></div>
+</div>
+
+<div class="card mb-3"><div class="card-body" style="padding:12px 16px;">
+  <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+    <div style="flex:1;min-width:160px;">
+      <label class="form-label" style="font-size:11px;margin-bottom:3px;">Buscar</label>
+      <input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="Folio o cliente...">
+    </div>
+    <div style="min-width:140px;">
+      <label class="form-label" style="font-size:11px;margin-bottom:3px;">Estatus</label>
+      <select class="form-select form-select-sm" name="estatus">
+        <option value="">Todos</option>
+        <option value="borrador" {% if fil_est=='borrador' %}selected{% endif %}>Borrador</option>
+        <option value="entregada" {% if fil_est=='entregada' %}selected{% endif %}>Entregada</option>
+        <option value="cancelada" {% if fil_est=='cancelada' %}selected{% endif %}>Cancelada</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+      <a href="{{ url_for('remisiones') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+    </div>
+  </form>
+</div></div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-truck me-1" style="color:#714B67;"></i> Remisiones de entrega</div>
+  {% if remisiones %}
+  <div class="table-responsive">
+    <table class="table" style="font-size:13px;">
+      <thead><tr>
+        <th>Folio</th><th>OV Origen</th><th>Cliente</th><th>Almacén</th>
+        <th>Estatus</th><th>SAP</th><th>Fecha</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% set col_est={"borrador":"#f8f9fa","entregada":"#e6f4ea","cancelada":"#fce8e6"} %}
+        {% set txt_est={"borrador":"#6c757d","entregada":"#1e7e34","cancelada":"#c5221f"} %}
+        {% for r in remisiones %}
+        <tr>
+          <td style="font-family:monospace;color:#714B67;font-weight:600;">{{ r.folio }}</td>
+          <td style="font-size:12px;">
+            {% if r.ov_folio %}
+            <a href="{{ url_for('detalle_venta',ov_id=r.orden_venta_id) }}" style="color:#714B67;font-family:monospace;">{{ r.ov_folio }}</a>
+            {% else %}—{% endif %}
+          </td>
+          <td style="font-weight:500;">{{ r.cliente_nombre or '—' }}</td>
+          <td style="font-size:12px;color:#6c757d;">{{ r.almacen_nombre or '—' }}</td>
+          <td>
+            <span style="background:{{ col_est.get(r.estatus,'#f8f9fa') }};color:{{ txt_est.get(r.estatus,'#6c757d') }};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:500;">
+              {{ r.estatus|capitalize }}
+            </span>
+          </td>
+          <td>
+            {% if r.sap_sync_status=='ok' %}<i class="bi bi-check-circle-fill" style="color:#1e7e34;" title="SAP: {{ r.sap_doc_entry }}"></i>
+            {% elif r.sap_sync_status=='error' %}<i class="bi bi-exclamation-triangle-fill" style="color:#c5221f;" title="{{ r.sap_sync_msg }}"></i>
+            {% else %}<i class="bi bi-clock" style="color:#adb5bd;"></i>{% endif %}
+          </td>
+          <td style="font-size:12px;color:#adb5bd;">{{ r.fecha_creacion[:10] if r.fecha_creacion else '—' }}</td>
+          <td>
+            <a href="{{ url_for('remision_pdf',rem_id=r.id) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="PDF">
+              <i class="bi bi-file-pdf"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:50px;text-align:center;color:#adb5bd;">
+    <i class="bi bi-truck" style="font-size:40px;display:block;margin-bottom:12px;"></i>
+    Sin remisiones. Las remisiones se crean desde una Orden de Venta.
+    <br><a href="{{ url_for('ventas') }}" class="btn btn-outline-primary btn-sm mt-3">Ver Órdenes de Venta</a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- FLUJO VISUAL -->
+<div class="card mt-3" style="border:none;background:transparent;">
+  <div class="card-body" style="padding:16px 0;">
+    <div style="font-size:12px;color:#adb5bd;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px;">Flujo de documentos</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div style="background:#f0e6f0;border-radius:8px;padding:10px 16px;font-size:12.5px;text-align:center;">
+        <i class="bi bi-file-earmark-text" style="color:#714B67;display:block;font-size:18px;margin-bottom:4px;"></i>
+        <b style="color:#714B67;">Cotización</b><br>
+        <span style="color:#6c757d;font-size:11px;">Propuesta al cliente</span>
+      </div>
+      <i class="bi bi-arrow-right" style="color:#adb5bd;font-size:18px;"></i>
+      <div style="background:#e8f0fe;border-radius:8px;padding:10px 16px;font-size:12.5px;text-align:center;">
+        <i class="bi bi-bag" style="color:#1a56db;display:block;font-size:18px;margin-bottom:4px;"></i>
+        <b style="color:#1a56db;">Orden de Venta</b><br>
+        <span style="color:#6c757d;font-size:11px;">Compromiso de venta</span>
+      </div>
+      <i class="bi bi-arrow-right" style="color:#adb5bd;font-size:18px;"></i>
+      <div style="background:#e6f4ea;border-radius:8px;padding:10px 16px;font-size:12.5px;text-align:center;">
+        <i class="bi bi-truck" style="color:#1e7e34;display:block;font-size:18px;margin-bottom:4px;"></i>
+        <b style="color:#1e7e34;">Remisión</b><br>
+        <span style="color:#6c757d;font-size:11px;">Entrega física</span>
+      </div>
+      <i class="bi bi-arrow-right" style="color:#adb5bd;font-size:18px;"></i>
+      <div style="background:#fff3e0;border-radius:8px;padding:10px 16px;font-size:12.5px;text-align:center;opacity:0.6;">
+        <i class="bi bi-receipt" style="color:#e65100;display:block;font-size:18px;margin-bottom:4px;"></i>
+        <b style="color:#e65100;">Factura</b><br>
+        <span style="color:#6c757d;font-size:11px;">Próximamente</span>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
