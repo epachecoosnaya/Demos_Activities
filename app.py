@@ -20,6 +20,10 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+APP_ENV = os.environ.get("APP_ENV", "production").strip().lower()
+IS_PRODUCTION = APP_ENV == "production"
+IS_STAGING = APP_ENV == "staging"
+
 # ── SAP Service Layer config ──────────────────────────────
 SAP_BASE_URL   = os.environ.get("SAP_BASE_URL","").rstrip("/")
 SAP_COMPANY_DB = os.environ.get("SAP_COMPANY_DB","")
@@ -197,6 +201,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def sap_login():
     """Abre sesión en SAP Service Layer. Retorna session o None."""
+    if IS_STAGING:
+        return None
     if not SAP_BASE_URL or not SAP_USER:
         return None
     try:
@@ -399,6 +405,9 @@ def inject_globals():
         "color_dark":     color_dark,
         "color_rgba":     color_rgba,
         "color_sidebar":  color_sidebar,
+        "app_env":         APP_ENV,
+        "is_staging":      IS_STAGING,
+        "is_production":   IS_PRODUCTION,
     }
 
 # ── LOGIN ─────────────────────────────────────────────────
